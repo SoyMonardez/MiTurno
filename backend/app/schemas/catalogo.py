@@ -20,6 +20,11 @@ class CategoriaOut(CategoriaBase):
     negocio_id: int
 
 
+class CategoriaUpdate(BaseModel):
+    nombre: str | None = None
+    orden: int | None = None
+
+
 class ServicioBase(BaseModel):
     nombre: str
     descripcion: str | None = None

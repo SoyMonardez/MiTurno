@@ -8,6 +8,7 @@ from app.models.negocio import Negocio
 from app.schemas.catalogo import (
     CategoriaCreate,
     CategoriaOut,
+    CategoriaUpdate,
     ServicioCreate,
     ServicioOut,
     ServicioUpdate,
@@ -47,6 +48,20 @@ def listar_categorias(negocio_id: int, db: Session = Depends(get_db)) -> list[Ca
             .order_by(Categoria.orden)
         )
     )
+
+
+@router.patch("/categorias/{categoria_id}", response_model=CategoriaOut)
+def actualizar_categoria(
+    categoria_id: int, data: CategoriaUpdate, db: Session = Depends(get_db)
+) -> Categoria:
+    categoria = db.get(Categoria, categoria_id)
+    if not categoria:
+        raise HTTPException(404, "Categoría no encontrada")
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(categoria, campo, valor)
+    db.commit()
+    db.refresh(categoria)
+    return categoria
 
 
 @router.delete("/categorias/{categoria_id}", status_code=204)

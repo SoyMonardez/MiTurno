@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet, apiPost, clearToken } from "../api/client.js";
+import { apiGet, apiPost, clearToken, getNegocioId } from "../api/client.js";
 import { fechaHora, formatoPrecio, isoFecha } from "../lib/format.js";
 import AdminGestion from "./AdminGestion.jsx";
 import SEO from "../components/SEO.jsx";
@@ -605,9 +605,15 @@ function TarjetaCliente({ cliente: c }) {
 
 function Resenas({ onError }) {
   const [resenas, setResenas] = useState(null);
+  const negocioId = getNegocioId();
+
   useEffect(() => {
-    apiGet("/negocios/1/resenas").then(setResenas).catch(onError);
-  }, [onError]);
+    if (negocioId) {
+      apiGet(`/negocios/${negocioId}/resenas`).then(setResenas).catch(onError);
+    } else {
+      setResenas([]);
+    }
+  }, [negocioId, onError]);
   if (!resenas) return <Cargando />;
   if (resenas.length === 0) return <p className="text-neutral-400 text-sm">Todavía no hay reseñas.</p>;
   return (

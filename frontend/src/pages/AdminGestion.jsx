@@ -8,6 +8,7 @@ import {
   Clock,
   DollarSign,
   Image as ImageIcon,
+  List,
   Loader2,
   Pencil,
   Plus,
@@ -27,6 +28,7 @@ import ImageUploader from "../components/ImageUploader.jsx";
 
 const SUBTABS = [
   { id: "Servicios", icon: Tag, label: "Servicios" },
+  { id: "Categorias", icon: List, label: "Categorías" },
   { id: "Profesionales", icon: Users, label: "Profesionales" },
   { id: "Agenda", icon: CalendarClock, label: "Agenda" },
   { id: "Portafolio", icon: ImageIcon, label: "Portafolio" },
@@ -56,6 +58,7 @@ export default function AdminGestion({ onError }) {
         ))}
       </div>
       {sub === "Servicios" && <Servicios negocioId={negocioId} onError={onError} />}
+      {sub === "Categorias" && <Categorias negocioId={negocioId} onError={onError} />}
       {sub === "Profesionales" && <Profesionales negocioId={negocioId} onError={onError} />}
       {sub === "Agenda" && <Agenda negocioId={negocioId} onError={onError} />}
       {sub === "Portafolio" && <Portafolio onError={onError} />}
@@ -63,6 +66,159 @@ export default function AdminGestion({ onError }) {
     </div>
   );
 }
+
+// ─── Categorías ──────────────────────────────────────────────────────────────
+
+function Categorias({ negocioId, onError }) {
+  const [categorias, setCategorias] = useState(null);
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [editandoId, setEditandoId] = useState(null);
+  const [editandoNombre, setEditandoNombre] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  const cargar = useCallback(() => {
+    apiGet(`/negocios/${negocioId}/categorias`)
+      .then(setCategorias)
+      .catch(onError);
+  }, [negocioId, onError]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  async function crear(e) {
+    e.preventDefault();
+    const nombre = nuevoNombre.trim();
+    if (!nombre) return;
+    setCargando(true);
+    try {
+      await apiPost(`/negocios/${negocioId}/categorias`, {
+        nombre,
+        orden: categorias ? categorias.length : 0,
+      });
+      setNuevoNombre("");
+      cargar();
+    } catch (err) {
+      onError(err);
+      alert(err.message);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  async function guardarEdicion(id) {
+    const nombre = editandoNombre.trim();
+    if (!nombre) return;
+    try {
+      await apiPatch(`/categorias/${id}`, { nombre });
+      setEditandoId(null);
+      setEditandoNombre("");
+      cargar();
+    } catch (err) {
+      onError(err);
+      alert(err.message);
+    }
+  }
+
+  async function borrar(id) {
+    if (!confirm("¿Seguro que querés eliminar esta categoría? Los servicios asociados quedarán sin categoría.")) return;
+    try {
+      await apiDelete(`/categorias/${id}`);
+      cargar();
+    } catch (err) {
+      onError(err);
+      alert(err.message);
+    }
+  }
+
+  if (!categorias) return <Cargando />;
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-neutral-200 bg-white p-6 max-w-xl">
+        <div className="flex items-center gap-2 mb-4">
+          <Plus size={16} className="text-neutral-700" strokeWidth={1.5} />
+          <h3 className="font-serif text-lg text-neutral-900">Nueva categoría</h3>
+        </div>
+        <form onSubmit={crear} className="flex gap-2">
+          <input
+            value={nuevoNombre}
+            onChange={(e) => setNuevoNombre(e.target.value)}
+            placeholder="Ej: Manicura"
+            required
+            className="campo-admin flex-1"
+          />
+          <button
+            type="submit"
+            disabled={cargando || !nuevoNombre.trim()}
+            className="flex items-center gap-2 rounded-full bg-neutral-900 text-white px-5 py-2.5 text-xs uppercase tracking-[0.1em] font-medium hover:bg-neutral-800 disabled:opacity-50 transition-colors"
+          >
+            {cargando ? <Loader2 size={14} className="animate-spin" /> : null}
+            Agregar
+          </button>
+        </form>
+      </div>
+
+      <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden max-w-xl divide-y divide-neutral-100">
+        {categorias.length === 0 && (
+          <p className="text-sm text-neutral-400 text-center py-8">Todavía no hay categorías creadas.</p>
+        )}
+        {categorias.map((c) => (
+          <div key={c.id} className="flex items-center justify-between p-4 gap-4">
+            {editandoId === c.id ? (
+              <div className="flex-1 flex gap-2">
+                <input
+                  value={editandoNombre}
+                  onChange={(e) => setEditandoNombre(e.target.value)}
+                  className="campo-admin text-sm py-1.5"
+                  required
+                />
+                <button
+                  onClick={() => guardarEdicion(c.id)}
+                  disabled={!editandoNombre.trim()}
+                  className="rounded-lg bg-neutral-900 text-white px-3 text-xs font-medium hover:bg-neutral-800"
+                >
+                  Guardar
+                </button>
+                <button
+                  onClick={() => setEditandoId(null)}
+                  className="rounded-lg border border-neutral-300 px-3 text-xs text-neutral-600 hover:bg-neutral-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <List size={14} className="text-neutral-400" />
+                  <span className="text-sm font-medium text-neutral-900">{c.nombre}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      setEditandoId(c.id);
+                      setEditandoNombre(c.nombre);
+                    }}
+                    className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 px-2.5 py-1.5 rounded-lg hover:bg-neutral-50"
+                  >
+                    <Pencil size={12} /> Editar
+                  </button>
+                  <button
+                    onClick={() => borrar(c.id)}
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2.5 py-1.5 rounded-lg hover:bg-red-50"
+                  >
+                    <Trash2 size={12} /> Eliminar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 // ─── Configuración del negocio ────────────────────────────────────────────────
 
@@ -520,18 +676,19 @@ function Servicios({ negocioId, onError }) {
           <p className="text-sm text-neutral-400 text-center py-6">Todavía no hay servicios.</p>
         )}
         {servicios.map((s) => (
-          <ServicioFila key={s.id} servicio={s} onToggle={() => toggle(s)} onActualizar={cargar} onError={onError} />
+          <ServicioFila key={s.id} servicio={s} categorias={categorias} onToggle={() => toggle(s)} onActualizar={cargar} onError={onError} />
         ))}
       </div>
     </div>
   );
 }
 
-function ServicioFila({ servicio: s, onToggle, onActualizar, onError }) {
+function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError }) {
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({
     nombre: s.nombre, descripcion: s.descripcion || "", duracion_min: s.duracion_min,
     precio: s.precio, imagen: s.imagen || "", buffer_min: s.buffer_min,
+    categoria_id: s.categoria_id || "",
   });
   const [guardando, setGuardando] = useState(false);
 
@@ -545,6 +702,7 @@ function ServicioFila({ servicio: s, onToggle, onActualizar, onError }) {
         buffer_min: Number(form.buffer_min),
         descripcion: form.descripcion || null,
         imagen: form.imagen || null,
+        categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
       });
       setEditando(false);
       onActualizar();
@@ -599,6 +757,13 @@ function ServicioFila({ servicio: s, onToggle, onActualizar, onError }) {
               <div>
                 <Etiqueta icono={<Tag size={12} />} label="Nombre" />
                 <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className="campo-admin" />
+              </div>
+              <div>
+                <Etiqueta label="Categoría" />
+                <select value={form.categoria_id} onChange={(e) => setForm({ ...form, categoria_id: e.target.value })} className="campo-admin">
+                  <option value="">Sin categoría</option>
+                  {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
@@ -929,8 +1094,8 @@ function Agenda({ negocioId, onError }) {
       await apiPost(`/profesionales/${profId}/excepciones`, {
         fecha: nuevaExc.fecha,
         tipo: nuevaExc.tipo,
-        hora_inicio: nuevaExc.tipo === "horario_especial" ? nuevaExc.hora_inicio : null,
-        hora_fin: nuevaExc.tipo === "horario_especial" ? nuevaExc.hora_fin : null,
+        hora_inicio: nuevaExc.tipo === "horario_especial" ? (nuevaExc.hora_inicio || "09:00") : null,
+        hora_fin: nuevaExc.tipo === "horario_especial" ? (nuevaExc.hora_fin || "13:00") : null,
       });
       setNuevaExc({ fecha: "", tipo: "no_disponible" });
       cargarAgenda();
