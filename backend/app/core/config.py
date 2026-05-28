@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     # CORS: orígenes permitidos del frontend, separados por coma.
     cors_origins: str = "http://localhost:5173"
 
+    # Email (SMTP). Si smtp_host queda vacío, los correos se imprimen en consola.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "MiTurno <no-reply@miturno.local>"
+    smtp_tls: bool = True
+
+    # URL pública del frontend, para armar enlaces (cancelación, etc.).
+    frontend_url: str = "http://localhost:5173"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
