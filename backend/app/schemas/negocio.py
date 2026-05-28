@@ -18,6 +18,16 @@ class NegocioCreate(NegocioBase):
     pass
 
 
+class NegocioUpdate(BaseModel):
+    nombre: str | None = None
+    descripcion: str | None = None
+    direccion: str | None = None
+    zona_horaria: str | None = None
+    email_notificaciones: str | None = None
+    logo: str | None = None
+    redes: str | None = None
+
+
 class NegocioOut(NegocioBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -31,6 +41,7 @@ class ProfesionalPublico(BaseModel):
     foto: str | None = None
     bio: str | None = None
     calificacion_promedio: float | None = None
+    servicio_ids: list[int] = []
 
 
 class NegocioPublico(NegocioOut):

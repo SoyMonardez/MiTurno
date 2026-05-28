@@ -26,6 +26,16 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-miturno}:${POSTGRES_PASSWORD:-miturno}@db:5432/${POSTGRES_DB:-miturno}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5173
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      SECRET_KEY: ${SECRET_KEY:-cambiar-esta-clave-en-produccion}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-MiTurno <no-reply@miturno.local>}
+      SMTP_TLS: ${SMTP_TLS:-true}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:
@@ -36,6 +46,39 @@ services:
       redis:
         condition: service_started
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-miturno}:${POSTGRES_PASSWORD:-miturno}@db:5432/${POSTGRES_DB:-miturno}
+      REDIS_URL: redis://redis:6379/0
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-MiTurno <no-reply@miturno.local>}
+      SMTP_TLS: ${SMTP_TLS:-true}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+
+  scheduler:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-miturno}:${POSTGRES_PASSWORD:-miturno}@db:5432/${POSTGRES_DB:-miturno}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_started
+    command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
 
   frontend:
     build: ./frontend

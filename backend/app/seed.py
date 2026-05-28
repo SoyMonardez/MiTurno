@@ -9,13 +9,42 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models.catalogo import Categoria, Servicio
-from app.models.enums import BadgeServicio
-from app.models.negocio import Negocio
+from app.models.enums import BadgeServicio, RolUsuario
+from app.models.negocio import Negocio, Usuario
 from app.models.profesional import HorarioRecurrente, Profesional
 
 SLUG_DEMO = "barberia-demo"
+
+
+def ensure_admin() -> None:
+    """Crea el admin demo si no existe (idempotente, independiente del negocio)."""
+    db = SessionLocal()
+    try:
+        negocio = db.scalar(select(Negocio).where(Negocio.slug == SLUG_DEMO))
+        if not negocio:
+            print("No existe el negocio demo; corré primero el seed completo.")
+            return
+        if db.scalar(select(Usuario).where(Usuario.username == "admin")):
+            print("El admin 'admin' ya existe. Nada que hacer.")
+            return
+        db.add(
+            Usuario(
+                negocio_id=negocio.id,
+                email="admin@barberiademo.local",
+                nombre="Admin Demo",
+                rol=RolUsuario.admin,
+                username="admin",
+                dni="30111222",
+                password_hash=hash_password("admin1234"),
+            )
+        )
+        db.commit()
+        print("Admin creado: usuario='admin', dni='30111222', clave='admin1234'")
+    finally:
+        db.close()
 
 
 def run() -> None:
@@ -26,7 +55,7 @@ def run() -> None:
             return
 
         negocio = Negocio(
-            nombre="Barbería Demo",
+            nombre="Barbería MiTurno",
             slug=SLUG_DEMO,
             descripcion="Barbería de ejemplo para probar MiTurno.",
             direccion="Av. Siempre Viva 742",
@@ -35,6 +64,17 @@ def run() -> None:
         )
         db.add(negocio)
         db.flush()
+
+        admin = Usuario(
+            negocio_id=negocio.id,
+            email="admin@barberiademo.local",
+            nombre="Admin Demo",
+            rol=RolUsuario.admin,
+            username="admin",
+            dni="30111222",
+            password_hash=hash_password("admin1234"),
+        )
+        db.add(admin)
 
         cat_cabello = Categoria(negocio_id=negocio.id, nombre="Cabello", orden=0)
         cat_barba = Categoria(negocio_id=negocio.id, nombre="Barba", orden=1)

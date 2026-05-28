@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.models.catalogo import Servicio
 from app.models.negocio import Negocio
-from app.models.profesional import HorarioRecurrente, Profesional
+from app.models.profesional import ExcepcionAgenda, HorarioRecurrente, Profesional
 from app.schemas.profesional import (
+    ExcepcionCreate,
+    ExcepcionOut,
     HorarioCreate,
     HorarioOut,
     ProfesionalCreate,
@@ -123,3 +125,50 @@ def listar_horarios(profesional_id: int, db: Session = Depends(get_db)) -> list[
             .order_by(HorarioRecurrente.dia_semana, HorarioRecurrente.hora_inicio)
         )
     )
+
+
+@router.delete("/horarios/{horario_id}", status_code=204)
+def eliminar_horario(horario_id: int, db: Session = Depends(get_db)) -> None:
+    horario = db.get(HorarioRecurrente, horario_id)
+    if not horario:
+        raise HTTPException(404, "Horario no encontrado")
+    db.delete(horario)
+    db.commit()
+
+
+# --- Excepciones de agenda (vacaciones / feriados / horario especial) ---
+
+
+@router.post(
+    "/profesionales/{profesional_id}/excepciones", response_model=ExcepcionOut, status_code=201
+)
+def crear_excepcion(
+    profesional_id: int, data: ExcepcionCreate, db: Session = Depends(get_db)
+) -> ExcepcionAgenda:
+    if not db.get(Profesional, profesional_id):
+        raise HTTPException(404, "Profesional no encontrado")
+    excepcion = ExcepcionAgenda(profesional_id=profesional_id, **data.model_dump())
+    db.add(excepcion)
+    db.commit()
+    db.refresh(excepcion)
+    return excepcion
+
+
+@router.get("/profesionales/{profesional_id}/excepciones", response_model=list[ExcepcionOut])
+def listar_excepciones(profesional_id: int, db: Session = Depends(get_db)) -> list[ExcepcionAgenda]:
+    return list(
+        db.scalars(
+            select(ExcepcionAgenda)
+            .where(ExcepcionAgenda.profesional_id == profesional_id)
+            .order_by(ExcepcionAgenda.fecha)
+        )
+    )
+
+
+@router.delete("/excepciones/{excepcion_id}", status_code=204)
+def eliminar_excepcion(excepcion_id: int, db: Session = Depends(get_db)) -> None:
+    excepcion = db.get(ExcepcionAgenda, excepcion_id)
+    if not excepcion:
+        raise HTTPException(404, "Excepción no encontrada")
+    db.delete(excepcion)
+    db.commit()

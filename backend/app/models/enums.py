@@ -36,6 +36,7 @@ class TipoExcepcion(str, enum.Enum):
 class TipoRecordatorio(str, enum.Enum):
     frecuencia = "frecuencia"
     inasistencia = "inasistencia"
+    turno_proximo = "turno_proximo"
 
 
 class EstadoRecordatorio(str, enum.Enum):
@@ -49,6 +50,7 @@ class TipoNotificacion(str, enum.Enum):
     aviso_admin = "aviso_admin"
     recordatorio_frecuencia = "recordatorio_frecuencia"
     sugerencia_inasistencia = "sugerencia_inasistencia"
+    recordatorio_turno = "recordatorio_turno"
 
 
 class EstadoNotificacion(str, enum.Enum):

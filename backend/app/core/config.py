@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     # URL pública del frontend, para armar enlaces (cancelación, etc.).
     frontend_url: str = "http://localhost:5173"
 
+    # Seguridad / JWT.
+    secret_key: str = "cambiar-esta-clave-en-produccion"
+    token_exp_minutes: int = 60 * 8
+
+    # Regla de negocio: anticipación mínima para cancelar (minutos).
+    cancelacion_min_anticipacion: int = 20
+
+    # IA: Groq tiene prioridad si está configurado, luego Anthropic, luego fallback local.
+    groq_api_key: str = ""
+    anthropic_api_key: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

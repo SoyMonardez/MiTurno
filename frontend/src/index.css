@@ -1,3 +1,112 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  body {
+    @apply antialiased;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .campo {
+    @apply w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm
+           focus:outline-none focus:border-neutral-900
+           placeholder:text-neutral-400 transition-colors;
+  }
+  .campo-modal {
+    @apply w-full rounded-xl border border-neutral-300 px-4 py-3.5 text-sm
+           focus:outline-none focus:border-neutral-900
+           placeholder:text-neutral-400 transition-colors;
+  }
+  .campo-admin {
+    @apply w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm
+           focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900
+           placeholder:text-neutral-400 transition-colors;
+  }
+}
+
+/* ── Animaciones (solo transform/opacity → GPU, óptimo en móvil) ── */
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes lineGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.modal-backdrop { animation: fadeIn 0.25s ease both; }
+.modal-sheet    { animation: slideUp 0.4s var(--ease-out-expo) both; }
+.fade-in        { animation: fadeIn 0.3s ease both; }
+.fade-up        { animation: fadeUp 0.4s var(--ease-out-expo) both; }
+.scale-in       { animation: scaleIn 0.25s var(--ease-out-expo) both; }
+
+/* Stagger: aplicar junto con .fade-up */
+.stagger > * { animation: fadeUp 0.4s var(--ease-out-expo) both; }
+.stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.stagger > *:nth-child(2) { animation-delay: 0.08s; }
+.stagger > *:nth-child(3) { animation-delay: 0.12s; }
+.stagger > *:nth-child(4) { animation-delay: 0.16s; }
+.stagger > *:nth-child(5) { animation-delay: 0.20s; }
+.stagger > *:nth-child(6) { animation-delay: 0.24s; }
+.stagger > *:nth-child(7) { animation-delay: 0.28s; }
+.stagger > *:nth-child(8) { animation-delay: 0.32s; }
+
+/* Línea editorial que crece bajo títulos */
+.line-grow { transform-origin: left; animation: lineGrow 0.5s var(--ease-out-expo) both; }
+
+/* Scrollbar oculto */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Sin highlight azul al tocar en móvil */
+* { -webkit-tap-highlight-color: transparent; }
+
+html { scroll-behavior: smooth; }
+
+/* Evita el zoom automático de iOS al enfocar inputs (font < 16px) */
+@media (pointer: coarse) {
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
+
+/* Skeleton */
+@keyframes shimmer {
+  0%   { background-position: -360px 0; }
+  100% { background-position: 360px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #ededed 25%, #e0e0e0 50%, #ededed 75%);
+  background-size: 360px 100%;
+  animation: shimmer 1.3s linear infinite;
+}
+
+/* Respeta usuarios que prefieren menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

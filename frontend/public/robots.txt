@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /admin
+
+# Enlace al sitemap dinámico (configurado para producción)
+Sitemap: https://miturno.alejomonardez.com/sitemap.xml

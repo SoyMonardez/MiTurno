@@ -11,9 +11,12 @@ class Resena(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     negocio_id: Mapped[int] = mapped_column(ForeignKey("negocios.id"), index=True)
-    reserva_id: Mapped[int] = mapped_column(ForeignKey("reservas.id"))
+    reserva_id: Mapped[int | None] = mapped_column(ForeignKey("reservas.id"), default=None)
     profesional_id: Mapped[int | None] = mapped_column(ForeignKey("profesionales.id"), default=None)
-    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"))
+    cliente_id: Mapped[int | None] = mapped_column(ForeignKey("clientes.id"), default=None)
+    # Para reseñas sin reserva (ingresadas directamente en la página)
+    autor_nombre: Mapped[str | None] = mapped_column(String(120), default=None)
+    autor_email: Mapped[str | None] = mapped_column(String(255), default=None)
     puntuacion: Mapped[int] = mapped_column(Integer)  # 1..5
     comentario: Mapped[str | None] = mapped_column(String(2000), default=None)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

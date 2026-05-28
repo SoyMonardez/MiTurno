@@ -49,6 +49,20 @@ def listar_categorias(negocio_id: int, db: Session = Depends(get_db)) -> list[Ca
     )
 
 
+@router.delete("/categorias/{categoria_id}", status_code=204)
+def eliminar_categoria(categoria_id: int, db: Session = Depends(get_db)) -> None:
+    categoria = db.get(Categoria, categoria_id)
+    if not categoria:
+        raise HTTPException(404, "Categoría no encontrada")
+    # Desasignar servicios que la usaban (no los borra)
+    for servicio in db.scalars(
+        select(Servicio).where(Servicio.categoria_id == categoria_id)
+    ):
+        servicio.categoria_id = None
+    db.delete(categoria)
+    db.commit()
+
+
 # --- Servicios ---
 
 

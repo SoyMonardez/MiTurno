@@ -1,6 +1,9 @@
+from datetime import date as date_type
 from datetime import time
 
 from pydantic import BaseModel, ConfigDict
+
+from app.models.enums import TipoExcepcion
 
 
 class HorarioBase(BaseModel):
@@ -17,6 +20,23 @@ class HorarioOut(HorarioBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     profesional_id: int
+
+
+class ExcepcionCreate(BaseModel):
+    fecha: date_type
+    tipo: TipoExcepcion = TipoExcepcion.no_disponible
+    hora_inicio: time | None = None
+    hora_fin: time | None = None
+
+
+class ExcepcionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    profesional_id: int
+    fecha: date_type
+    tipo: TipoExcepcion
+    hora_inicio: time | None
+    hora_fin: time | None
 
 
 class ProfesionalBase(BaseModel):

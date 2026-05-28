@@ -16,6 +16,10 @@ from app.models.reserva import Reserva, ReservaItem
 from app.schemas.reserva import ReservaCreate
 from app.services.disponibilidad import duracion_total_min
 from app.services.notificaciones import enviar_confirmacion_reserva
+from app.services.recordatorios import (
+    cancelar_pendientes_de_cliente,
+    programar_recordatorio_turno,
+)
 
 
 def _cargar_servicios_ordenados(
@@ -149,6 +153,12 @@ def crear_reserva(data: ReservaCreate, db: Session) -> Reserva:
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, "El horario ya fue reservado")
+
+    # El cliente vuelve a reservar: cancelamos recordatorios pendientes de "volver".
+    cancelar_pendientes_de_cliente(cliente.id, db)
+
+    # Recordatorio automático 24 h antes del turno.
+    programar_recordatorio_turno(reserva, db)
 
     enviar_confirmacion_reserva(
         db=db,

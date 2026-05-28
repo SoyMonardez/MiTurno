@@ -1,6 +1,6 @@
 from app.models.catalogo import Categoria, Servicio
 from app.models.cliente import Cliente
-from app.models.negocio import Negocio, Usuario
+from app.models.negocio import Negocio, RegistroAcceso, Usuario
 from app.models.notificacion import NotificacionLog, RecordatorioProgramado
 from app.models.portafolio import PortafolioImagen
 from app.models.profesional import (
@@ -17,6 +17,7 @@ __all__ = [
     "Servicio",
     "Cliente",
     "Negocio",
+    "RegistroAcceso",
     "Usuario",
     "NotificacionLog",
     "RecordatorioProgramado",

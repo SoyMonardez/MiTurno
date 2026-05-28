@@ -35,6 +35,29 @@ class Usuario(Base):
     telefono: Mapped[str | None] = mapped_column(String(40), default=None)
     rol: Mapped[RolUsuario] = mapped_column(default=RolUsuario.cliente)
     google_id: Mapped[str | None] = mapped_column(String(120), unique=True, default=None)
+
+    # Credenciales de acceso al panel (admin / super-admin).
+    username: Mapped[str | None] = mapped_column(String(60), unique=True, default=None)
+    dni: Mapped[str | None] = mapped_column(String(20), default=None)
+    password_hash: Mapped[str | None] = mapped_column(String(255), default=None)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    ultimo_login_en: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     negocio: Mapped["Negocio | None"] = relationship(back_populates="usuarios")
+
+
+class RegistroAcceso(Base):
+    """Auditoría: cada ingreso al panel queda registrado (quién y cuándo)."""
+
+    __tablename__ = "registros_acceso"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    negocio_id: Mapped[int | None] = mapped_column(ForeignKey("negocios.id"), index=True)
+    ingreso_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
