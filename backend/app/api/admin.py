@@ -30,6 +30,7 @@ from app.schemas.admin import (
     TextoIn,
 )
 from app.schemas.reserva import ReservaOut
+from app.schemas.negocio import NegocioUpdate, NegocioOut
 from app.services.gestion_reservas import cancelar_por_admin, marcar_asistencia
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -441,3 +442,46 @@ def listar_clientes(
     if segmento is not None:
         consulta = consulta.where(Cliente.segmento == segmento)
     return list(db.scalars(consulta.order_by(Cliente.nombre)))
+
+
+@router.get("/negocio", response_model=NegocioOut)
+def obtener_negocio(
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> Negocio:
+    negocio = db.get(Negocio, admin.negocio_id)
+    if not negocio:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Negocio no encontrado")
+    return negocio
+
+
+@router.patch("/negocio", response_model=NegocioOut)
+def actualizar_negocio(
+    data: NegocioUpdate,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> Negocio:
+    negocio = db.get(Negocio, admin.negocio_id)
+    if not negocio:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Negocio no encontrado")
+
+    if data.nombre is not None:
+        negocio.nombre = data.nombre
+    if data.descripcion is not None:
+        negocio.descripcion = data.descripcion
+    if data.direccion is not None:
+        negocio.direccion = data.direccion
+    if data.zona_horaria is not None:
+        negocio.zona_horaria = data.zona_horaria
+    if data.email_notificaciones is not None:
+        negocio.email_notificaciones = data.email_notificaciones
+    if data.logo is not None:
+        negocio.logo = data.logo
+    if data.redes is not None:
+        negocio.redes = data.redes
+
+    db.commit()
+    db.refresh(negocio)
+    return negocio

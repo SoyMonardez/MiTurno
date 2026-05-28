@@ -34,6 +34,16 @@ class NegocioOut(NegocioBase):
     activo: bool
 
 
+class NegocioUpdate(BaseModel):
+    nombre: str | None = None
+    descripcion: str | None = None
+    direccion: str | None = None
+    zona_horaria: str | None = None
+    email_notificaciones: str | None = None
+    logo: str | None = None
+    redes: str | None = None
+
+
 class ProfesionalPublico(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
