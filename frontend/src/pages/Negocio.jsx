@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Globe,
   Mail,
   MapPin,
   Moon,
@@ -41,6 +42,26 @@ function getDias(cant = 45) {
 
 function iniciales(nombre = "") {
   return nombre.split(" ").slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+}
+
+function IconInstagram({ size = 16, className = "" }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
 }
 
 // ─── Estrellas (icono, nunca texto) ───────────────────────────────────────────
@@ -557,6 +578,48 @@ function TabDetalles({ negocio, portafolio }) {
         <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 p-5">
           <Clock size={18} className="text-neutral-900 flex-shrink-0" strokeWidth={1.5} />
           <p className="text-sm text-neutral-700">{negocio.zona_horaria.replace(/_/g, " ")}</p>
+        </div>
+      )}
+
+      {(negocio.redes || negocio.email_notificaciones) && (
+        <div className="rounded-2xl border border-neutral-200 p-5 space-y-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Contacto y Redes</p>
+          <div className="space-y-3">
+            {negocio.email_notificaciones && (
+              <div className="flex items-center gap-3">
+                <Mail size={16} className="text-neutral-900" strokeWidth={1.5} />
+                <a
+                  href={`mailto:${negocio.email_notificaciones}`}
+                  className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+                >
+                  {negocio.email_notificaciones}
+                </a>
+              </div>
+            )}
+            {negocio.redes && (
+              <div className="flex items-center gap-3">
+                {negocio.redes.includes("instagram.com") || negocio.redes.startsWith("@") ? (
+                  <IconInstagram size={16} className="text-neutral-900" />
+                ) : (
+                  <Globe size={16} className="text-neutral-900" strokeWidth={1.5} />
+                )}
+                <a
+                  href={
+                    negocio.redes.startsWith("@")
+                      ? `https://instagram.com/${negocio.redes.slice(1)}`
+                      : negocio.redes.startsWith("http")
+                      ? negocio.redes
+                      : `https://${negocio.redes}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors underline decoration-dotted"
+                >
+                  {negocio.redes}
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
