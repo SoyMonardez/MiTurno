@@ -323,17 +323,21 @@ export default function Negocio() {
 // ─── Header editorial negro ───────────────────────────────────────────────────
 
 function NegocioHeader({ negocio }) {
+  const bgStyle = negocio.logo
+    ? { backgroundImage: `url(${negocio.logo})`, backgroundSize: "cover", backgroundPosition: "center" }
+    : {};
+
   return (
-    <div className="bg-neutral-950 px-6 pt-14 pb-12 text-white text-center relative overflow-hidden">
-      {negocio.logo ? (
-        <img
-          src={negocio.logo}
-          alt={negocio.nombre}
-          className="w-24 h-24 mx-auto mb-4 object-cover rounded-2xl border border-neutral-800/80 shadow-lg fade-in"
-          loading="eager"
-          decoding="async"
-        />
-      ) : (
+    <div
+      style={bgStyle}
+      className="bg-neutral-950 px-6 pt-16 pb-14 text-white text-center relative overflow-hidden"
+    >
+      {/* Filtro oscuro para asegurar legibilidad */}
+      {negocio.logo && (
+        <div className="absolute inset-0 bg-neutral-950/75 z-0" />
+      )}
+
+      <div className="relative z-10">
         <div className="fade-up">
           <div className="flex items-center justify-center gap-3 mb-2">
             <span className="h-px w-8 bg-white/40" />
@@ -344,18 +348,18 @@ function NegocioHeader({ negocio }) {
             {negocio.nombre}
           </h1>
         </div>
-      )}
-      {negocio.descripcion && (
-        <p className="text-neutral-400 text-[11px] uppercase tracking-[0.15em] mt-3 fade-in max-w-[280px] mx-auto leading-relaxed">
-          {negocio.descripcion}
-        </p>
-      )}
-      {negocio.direccion && (
-        <p className="text-neutral-500 text-xs mt-3 flex items-center justify-center gap-1.5 fade-in">
-          <MapPin size={11} strokeWidth={1.5} />
-          {negocio.direccion}
-        </p>
-      )}
+        {negocio.descripcion && (
+          <p className="text-neutral-300 text-[11px] uppercase tracking-[0.15em] mt-3 fade-in max-w-[280px] mx-auto leading-relaxed">
+            {negocio.descripcion}
+          </p>
+        )}
+        {negocio.direccion && (
+          <p className="text-neutral-400 text-xs mt-3 flex items-center justify-center gap-1.5 fade-in">
+            <MapPin size={11} strokeWidth={1.5} />
+            {negocio.direccion}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
