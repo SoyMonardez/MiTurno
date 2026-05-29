@@ -41,3 +41,19 @@ class ReservaOut(BaseModel):
     fin: datetime
     token_cancelacion: str
     items: list[ReservaItemOut] = []
+
+
+class ReservaPublicaOut(BaseModel):
+    """Datos de una reserva para la página de cancelación (por token)."""
+    estado: EstadoReserva
+    inicio: datetime
+    fin: datetime
+    total_precio: Decimal
+    total_duracion: int
+    negocio_nombre: str
+    negocio_slug: str
+    negocio_icono: str
+    profesional_nombre: str
+    servicios: list[str]
+    cancelable: bool
+    minutos_anticipacion: int

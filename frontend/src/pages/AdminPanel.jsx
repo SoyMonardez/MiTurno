@@ -16,6 +16,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet, apiPost, clearToken, getNegocioId } from "../api/client.js";
+import { useDialog } from "../components/Dialog.jsx";
 import { fechaHora, formatoPrecio, isoFecha } from "../lib/format.js";
 import AdminGestion from "./AdminGestion.jsx";
 import SEO from "../components/SEO.jsx";
@@ -274,6 +275,7 @@ const ESTADO_CONFIG = {
 };
 
 function Turnos({ onError }) {
+  const dialog = useDialog();
   const hoy = isoFecha(new Date());
   const enUnaSemana = isoFecha(new Date(Date.now() + 7 * 86400000));
   const [desde, setDesde] = useState(hoy);
@@ -298,7 +300,7 @@ function Turnos({ onError }) {
 
   async function accion(id, fn) {
     try { await fn(); refrescar(); }
-    catch (err) { onError(err); alert(err.message); }
+    catch (err) { onError(err); await dialog.error(err.message); }
   }
 
   function aplicarFiltroRapido(dias) {

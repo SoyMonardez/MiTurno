@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiDelete, apiGet, apiPatch, apiPost, getNegocioId } from "../api/client.js";
+import { useDialog } from "../components/Dialog.jsx";
+import { ICONOS } from "../lib/iconos.jsx";
 import { formatoPrecio } from "../lib/format.js";
 import ImageUploader from "../components/ImageUploader.jsx";
 
@@ -70,6 +72,7 @@ export default function AdminGestion({ onError }) {
 // ─── Categorías ──────────────────────────────────────────────────────────────
 
 function Categorias({ negocioId, onError }) {
+  const dialog = useDialog();
   const [categorias, setCategorias] = useState(null);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [editandoId, setEditandoId] = useState(null);
@@ -77,6 +80,7 @@ function Categorias({ negocioId, onError }) {
   const [cargando, setCargando] = useState(false);
   const [sugerencias, setSugerencias] = useState([]);
   const [sugeridorCargando, setSugeridorCargando] = useState(false);
+  const [promptCategorias, setPromptCategorias] = useState("");
 
   const cargar = useCallback(() => {
     apiGet(`/negocios/${negocioId}/categorias`)
@@ -92,7 +96,7 @@ function Categorias({ negocioId, onError }) {
     setSugeridorCargando(true);
     try {
       const miNegocio = await apiGet("/negocios/mi-negocio");
-      const res = await apiPost("/admin/ia/sugerir-categorias", { texto: miNegocio.nombre || "" });
+      const res = await apiPost("/admin/ia/sugerir-categorias", { texto: promptCategorias.trim() || miNegocio.nombre || "" });
       if (res.categorias) {
         setSugerencias(res.categorias);
       }
@@ -114,7 +118,7 @@ function Categorias({ negocioId, onError }) {
       cargar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setCargando(false);
     }
@@ -134,7 +138,7 @@ function Categorias({ negocioId, onError }) {
       cargar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setCargando(false);
     }
@@ -150,18 +154,18 @@ function Categorias({ negocioId, onError }) {
       cargar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     }
   }
 
   async function borrar(id) {
-    if (!confirm("¿Seguro que querés eliminar esta categoría? Los servicios asociados quedarán sin categoría.")) return;
+    if (!await dialog.confirm("¿Seguro que querés eliminar esta categoría? Los servicios asociados quedarán sin categoría.")) return;
     try {
       await apiDelete(`/categorias/${id}`);
       cargar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     }
   }
 
@@ -209,6 +213,15 @@ function Categorias({ negocioId, onError }) {
             {sugeridorCargando ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} />}
             {sugeridorCargando ? "Sugiriendo…" : "Sugerir con IA"}
           </button>
+        </div>
+
+        <div className="mb-3">
+          <input
+            value={promptCategorias}
+            onChange={(e) => setPromptCategorias(e.target.value)}
+            placeholder="Describí tu negocio o especialidad (ej: Peluquería canina, Clínica estética...)"
+            className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs focus:outline-none focus:border-neutral-900 placeholder:text-neutral-400 transition-colors"
+          />
         </div>
 
         {sugerencias.length > 0 ? (
@@ -308,6 +321,7 @@ const ZONAS = [
 ];
 
 function ConfigNegocio({ onError }) {
+  const dialog = useDialog();
   const [form, setForm] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [ok, setOk] = useState(false);
@@ -319,7 +333,7 @@ function ConfigNegocio({ onError }) {
 
   async function generarDescripcionConIA() {
     if (!form.nombre?.trim()) {
-      alert("Por favor ingresá primero el nombre del negocio.");
+      await dialog.error("Por favor ingresá primero el nombre del negocio.");
       return;
     }
     setGenerandoDesc(true);
@@ -351,14 +365,16 @@ function ConfigNegocio({ onError }) {
         zona_horaria: form.zona_horaria,
         email_notificaciones: form.email_notificaciones || null,
         logo: form.logo || null,
+        icono: form.icono || "scissors",
         redes: form.redes || null,
+        mapa_url: form.mapa_url || null,
       });
       setForm(res);
       setOk(true);
       setTimeout(() => setOk(false), 2500);
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setGuardando(false);
     }
@@ -401,10 +417,39 @@ function ConfigNegocio({ onError }) {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
+        {/* Selector de ícono / rubro */}
+        <div>
+          <Etiqueta icono={<Sparkles size={12} />} label="Ícono del negocio (según tu rubro)" />
+          <p className="text-xs text-neutral-400 mb-2">Se muestra en tu página si no subís un logo.</p>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {Object.entries(ICONOS).map(([clave, { label, Icon }]) => {
+              const activo = (form.icono || "scissors") === clave;
+              return (
+                <button
+                  key={clave}
+                  type="button"
+                  onClick={() => setForm({ ...form, icono: clave })}
+                  title={label}
+                  className={`flex flex-col items-center gap-1 rounded-xl border p-2.5 transition-all active:scale-95 ${
+                    activo ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 text-neutral-500 hover:border-neutral-400"
+                  }`}
+                >
+                  <Icon size={20} strokeWidth={1.5} />
+                  <span className="text-[9px] leading-tight text-center line-clamp-2">{label.split(" / ")[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-4">
           <div>
             <Etiqueta label="Dirección" />
             <input value={form.direccion || ""} onChange={set("direccion")} className="campo-admin" placeholder="Ej: Av. Siempre Viva 742" />
+          </div>
+          <div>
+            <Etiqueta label="Enlace Google Maps" />
+            <input value={form.mapa_url || ""} onChange={set("mapa_url")} className="campo-admin" placeholder="https://maps.app.goo.gl/..." />
           </div>
           <div>
             <Etiqueta label="Zona horaria" />
@@ -579,6 +624,7 @@ const VACIO_SERVICIO = {
 };
 
 function Servicios({ negocioId, onError }) {
+  const dialog = useDialog();
   const [servicios, setServicios] = useState(null);
   const [categorias, setCategorias] = useState([]);
   const [nuevo, setNuevo] = useState(VACIO_SERVICIO);
@@ -601,7 +647,7 @@ function Servicios({ negocioId, onError }) {
       setCategorias((prev) => [...prev, cat]);
       setNuevo((p) => ({ ...p, categoria_id: cat.id }));
       setNuevaCat("");
-    } catch (err) { onError(err); alert(err.message); }
+    } catch (err) { onError(err); await dialog.error(err.message); }
   }
 
   function aplicarSugerencia(s) {
@@ -634,12 +680,13 @@ function Servicios({ negocioId, onError }) {
         imagen: nuevo.imagen || null,
         descripcion: nuevo.descripcion || null,
         categoria_id: nuevo.categoria_id ? Number(nuevo.categoria_id) : null,
+        badge: nuevo.badge || "ninguno",
       });
       setNuevo(VACIO_SERVICIO);
       cargar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     }
   }
 
@@ -703,12 +750,25 @@ function Servicios({ negocioId, onError }) {
                 </div>
               </div>
 
-              <div>
-                <Etiqueta icono={<Tag size={12} />} label="Categoría (opcional)" />
-                <select value={nuevo.categoria_id} onChange={(e) => setNuevo({ ...nuevo, categoria_id: e.target.value })} className="campo-admin">
-                  <option value="">Sin categoría</option>
-                  {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Etiqueta icono={<Tag size={12} />} label="Categoría" />
+                  <select value={nuevo.categoria_id} onChange={(e) => setNuevo({ ...nuevo, categoria_id: e.target.value })} className="campo-admin">
+                    <option value="">Sin categoría</option>
+                    {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Etiqueta label="Etiqueta / Badge" />
+                  <select value={nuevo.badge} onChange={(e) => setNuevo({ ...nuevo, badge: e.target.value })} className="campo-admin">
+                    <option value="ninguno">Ninguno</option>
+                    <option value="recomendado">Recomendado</option>
+                    <option value="popular">Popular</option>
+                    <option value="nuevo">Nuevo</option>
+                    <option value="hot">Destacado 🔥 (Hot)</option>
+                  </select>
+                </div>
+              </div>
                 <div className="flex gap-2 mt-2">
                   <input value={nuevaCat} onChange={(e) => setNuevaCat(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), crearCategoria())}
@@ -720,7 +780,6 @@ function Servicios({ negocioId, onError }) {
                 </div>
               </div>
             </div>
-          </div>
 
           {/* Descripción con IA */}
           <div>
@@ -788,23 +847,24 @@ function Servicios({ negocioId, onError }) {
 }
 
 function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError }) {
+  const dialog = useDialog();
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({
     nombre: s.nombre, descripcion: s.descripcion || "", duracion_min: s.duracion_min,
     precio: s.precio, imagen: s.imagen || "", buffer_min: s.buffer_min,
-    categoria_id: s.categoria_id || "",
+    categoria_id: s.categoria_id || "", badge: s.badge || "ninguno",
   });
   const [guardando, setGuardando] = useState(false);
 
   async function eliminar() {
-    if (!confirm(`¿Seguro que querés eliminar el servicio "${s.nombre}"? Esta acción no se puede deshacer.`)) return;
+    if (!await dialog.confirm(`¿Seguro que querés eliminar el servicio "${s.nombre}"? Esta acción no se puede deshacer.`)) return;
     setGuardando(true);
     try {
       await apiDelete(`/servicios/${s.id}`);
       onActualizar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
       onActualizar();
     } finally {
       setGuardando(false);
@@ -822,12 +882,13 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
         descripcion: form.descripcion || null,
         imagen: form.imagen || null,
         categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
+        badge: form.badge || "ninguno",
       });
       setEditando(false);
       onActualizar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setGuardando(false);
     }
@@ -845,6 +906,13 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
             </div>
           )}
           <div className="flex-1 min-w-0">
+            {s.badge && s.badge !== "ninguno" && (
+              <span className={`inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.1em] mb-1 ${
+                s.badge === "hot" ? "text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100" : "text-neutral-500"
+              }`}>
+                {s.badge === "hot" ? "🔥 Mas pedido" : s.badge}
+              </span>
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`font-medium text-sm ${!s.activo ? "line-through" : ""}`}>{s.nombre}</span>
               <span className="flex items-center gap-1 text-xs text-neutral-400"><Clock size={11} />{s.duracion_min} min</span>
@@ -864,6 +932,7 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
                 imagen: s.imagen || "",
                 buffer_min: s.buffer_min,
                 categoria_id: s.categoria_id || "",
+                badge: s.badge || "ninguno",
               });
             }
             setEditando((v) => !v);
@@ -894,12 +963,24 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
                 <Etiqueta icono={<Tag size={12} />} label="Nombre" />
                 <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className="campo-admin" />
               </div>
-              <div>
-                <Etiqueta label="Categoría" />
-                <select value={form.categoria_id} onChange={(e) => setForm({ ...form, categoria_id: e.target.value })} className="campo-admin">
-                  <option value="">Sin categoría</option>
-                  {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Etiqueta label="Categoría" />
+                  <select value={form.categoria_id} onChange={(e) => setForm({ ...form, categoria_id: e.target.value })} className="campo-admin">
+                    <option value="">Sin categoría</option>
+                    {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Etiqueta label="Etiqueta" />
+                  <select value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} className="campo-admin">
+                    <option value="ninguno">Ninguno</option>
+                    <option value="recomendado">Recomendado</option>
+                    <option value="popular">Popular</option>
+                    <option value="nuevo">Nuevo</option>
+                    <option value="hot">Destacado 🔥 (Hot)</option>
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
@@ -941,6 +1022,7 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
 // ─── Profesionales ────────────────────────────────────────────────────────────
 
 function Profesionales({ negocioId, onError }) {
+  const dialog = useDialog();
   const [profesionales, setProfesionales] = useState(null);
   const [servicios, setServicios] = useState([]);
   const [nuevo, setNuevo] = useState({ nombre: "", bio: "", foto: "", servicio_ids: [] });
@@ -969,7 +1051,7 @@ function Profesionales({ negocioId, onError }) {
       cargar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     }
   }
 
@@ -1010,7 +1092,21 @@ function Profesionales({ negocioId, onError }) {
             </div>
 
             <div>
-              <Etiqueta icono={<Tag size={12} />} label="Servicios que realiza" />
+              <div className="flex items-center justify-between mb-1.5">
+                <Etiqueta icono={<Tag size={12} />} label="Servicios que realiza" sinMargen />
+                {servicios.length > 0 && (
+                  <div className="flex gap-1.5">
+                    <button type="button" onClick={() => setNuevo({ ...nuevo, servicio_ids: servicios.map(s => s.id) })}
+                      className="text-[10px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-full px-2.5 py-0.5 font-medium transition-colors">
+                      Seleccionar todos
+                    </button>
+                    <button type="button" onClick={() => setNuevo({ ...nuevo, servicio_ids: [] })}
+                      className="text-[10px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-full px-2.5 py-0.5 font-medium transition-colors">
+                      Deseleccionar todos
+                    </button>
+                  </div>
+                )}
+              </div>
               {servicios.length === 0 ? (
                 <p className="text-xs text-neutral-400 italic">Primero creá servicios.</p>
               ) : (
@@ -1055,6 +1151,7 @@ function Profesionales({ negocioId, onError }) {
 }
 
 function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
+  const dialog = useDialog();
   const [ids, setIds] = useState(profesional.servicio_ids);
   const [guardando, setGuardando] = useState(false);
   const [editando, setEditando] = useState(false);
@@ -1083,7 +1180,7 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
       onSaved();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setGuardando(false);
     }
@@ -1104,21 +1201,21 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
       onSaved();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setGuardando(false);
     }
   }
 
   async function eliminar() {
-    if (!confirm(`¿Seguro que querés eliminar al profesional ${profesional.nombre}? Esta acción no se puede deshacer.`)) return;
+    if (!await dialog.confirm(`¿Seguro que querés eliminar al profesional ${profesional.nombre}? Esta acción no se puede deshacer.`)) return;
     setGuardando(true);
     try {
       await apiDelete(`/profesionales/${profesional.id}`);
       onSaved();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setGuardando(false);
     }
@@ -1143,9 +1240,9 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
         <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t border-neutral-100 sm:border-0 flex-shrink-0">
           {cambiado && (
             <button onClick={guardar} disabled={guardando}
-              className="flex items-center gap-1.5 rounded-full bg-neutral-900 text-white px-4 py-1.5 text-xs uppercase tracking-[0.1em] disabled:opacity-50">
+              className="flex items-center gap-1.5 rounded-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-1.5 text-xs uppercase tracking-[0.1em] font-medium disabled:opacity-50 transition-colors shadow-sm animate-pulse">
               {guardando ? <Loader2 size={12} className="animate-spin" /> : null}
-              {guardando ? "Guardando" : "Guardar"}
+              {guardando ? "Guardando" : "Guardar cambios"}
             </button>
           )}
           <button onClick={() => {
@@ -1169,7 +1266,21 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
 
       {!editando && (
         <>
-          <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-2">Servicios habilitados</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400">Servicios habilitados</p>
+            {servicios.length > 0 && (
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => setIds(servicios.map(s => s.id))}
+                  className="text-[10px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-full px-2.5 py-0.5 font-medium transition-colors">
+                  Seleccionar todos
+                </button>
+                <button type="button" onClick={() => setIds([])}
+                  className="text-[10px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-full px-2.5 py-0.5 font-medium transition-colors">
+                  Deseleccionar todos
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
             {servicios.map((s) => (
               <button key={s.id} onClick={() => toggle(s.id)}
@@ -1202,7 +1313,21 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
             </div>
           </div>
           <div>
-            <Etiqueta icono={<Tag size={12} />} label="Servicios habilitados" />
+            <div className="flex items-center justify-between mb-1.5">
+              <Etiqueta icono={<Tag size={12} />} label="Servicios habilitados" sinMargen />
+              {servicios.length > 0 && (
+                <div className="flex gap-1.5">
+                  <button type="button" onClick={() => setForm({ ...form, servicio_ids: servicios.map(s => s.id) })}
+                    className="text-[10px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-full px-2.5 py-0.5 font-medium transition-colors">
+                    Seleccionar todos
+                  </button>
+                  <button type="button" onClick={() => setForm({ ...form, servicio_ids: [] })}
+                    className="text-[10px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-full px-2.5 py-0.5 font-medium transition-colors">
+                    Deseleccionar todos
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               {servicios.map((s) => {
                 const activo = form.servicio_ids.includes(s.id);
@@ -1245,6 +1370,7 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
 // ─── Portafolio ───────────────────────────────────────────────────────────────
 
 function Portafolio({ onError }) {
+  const dialog = useDialog();
   const [imagenes, setImagenes] = useState(null);
   const negocioId = getNegocioId();
 
@@ -1260,12 +1386,12 @@ function Portafolio({ onError }) {
       cargar();
     } catch (err) {
       onError(err);
-      alert(err.message);
+      await dialog.error(err.message);
     }
   }
 
   async function borrar(id) {
-    if (!confirm("¿Eliminar esta foto del portafolio?")) return;
+    if (!await dialog.confirm("¿Eliminar esta foto del portafolio?")) return;
     try {
       await apiDelete(`/admin/portafolio/${id}`);
       cargar();
@@ -1315,12 +1441,49 @@ const DIAS_SEMANA = [
 ];
 
 function Agenda({ negocioId, onError }) {
+  const dialog = useDialog();
   const [profesionales, setProfesionales] = useState(null);
   const [profId, setProfId] = useState(null);
   const [horarios, setHorarios] = useState([]);
   const [excepciones, setExcepciones] = useState([]);
   const [nuevoHorario, setNuevoHorario] = useState({ dia_semana: 0, hora_inicio: "09:00", hora_fin: "13:00" });
   const [nuevaExc, setNuevaExc] = useState({ fecha: "", tipo: "no_disponible" });
+  const [diasSeleccionados, setDiasSeleccionados] = useState([0, 1, 2, 3, 4]);
+  const [turno1, setTurno1] = useState({ hora_inicio: "09:00", hora_fin: "13:00" });
+  const [turno2, setTurno2] = useState({ hora_inicio: "15:00", hora_fin: "19:00" });
+  const [dobleTurno, setDobleTurno] = useState(false);
+  const [autocompletando, setAutocompletando] = useState(false);
+
+  async function autocompletarHorarios(e) {
+    e.preventDefault();
+    if (diasSeleccionados.length === 0) {
+      await dialog.error("Por favor selecciona al menos un día.");
+      return;
+    }
+    if (!await dialog.confirm("Esto reemplazará todos los horarios recurrentes de este profesional. ¿Deseas continuar?")) return;
+    setAutocompletando(true);
+    try {
+      const rangos = [
+        { hora_inicio: turno1.hora_inicio, hora_fin: turno1.hora_fin }
+      ];
+      if (dobleTurno) {
+        rangos.push({ hora_inicio: turno2.hora_inicio, hora_fin: turno2.hora_fin });
+      }
+      
+      await apiPost(`/profesionales/${profId}/horarios/bulk`, {
+        dias_semana: diasSeleccionados,
+        rangos: rangos,
+        limpiar_existentes: true
+      });
+      
+      cargarAgenda();
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setAutocompletando(false);
+    }
+  }
 
   useEffect(() => {
     apiGet(`/negocios/${negocioId}/profesionales`)
@@ -1343,7 +1506,7 @@ function Agenda({ negocioId, onError }) {
     try {
       await apiPost(`/profesionales/${profId}/horarios`, nuevoHorario);
       cargarAgenda();
-    } catch (err) { onError(err); alert(err.message); }
+    } catch (err) { onError(err); await dialog.error(err.message); }
   }
   async function quitarHorario(id) {
     try { await apiDelete(`/horarios/${id}`); cargarAgenda(); }
@@ -1361,7 +1524,7 @@ function Agenda({ negocioId, onError }) {
       });
       setNuevaExc({ fecha: "", tipo: "no_disponible" });
       cargarAgenda();
-    } catch (err) { onError(err); alert(err.message); }
+    } catch (err) { onError(err); await dialog.error(err.message); }
   }
   async function quitarExcepcion(id) {
     try { await apiDelete(`/excepciones/${id}`); cargarAgenda(); }
@@ -1439,6 +1602,137 @@ function Agenda({ negocioId, onError }) {
           <button type="submit" className="flex items-center gap-1.5 rounded-full bg-neutral-900 text-white px-4 py-2.5 text-xs uppercase tracking-[0.1em] hover:bg-neutral-800">
             <Plus size={14} /> Agregar
           </button>
+        </form>
+      </div>
+
+      {/* Autocompletar Horarios Rápido */}
+      <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles size={16} className="text-neutral-700" strokeWidth={1.5} />
+          <h3 className="font-serif text-base text-neutral-900">Autocompletar horarios</h3>
+          <span className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 border border-neutral-200 bg-white rounded-full px-2 py-0.5 ml-auto">
+            Semana rápida
+          </span>
+        </div>
+
+        <form onSubmit={autocompletarHorarios} className="space-y-4">
+          {/* Selección de Días */}
+          <div>
+            <Etiqueta label="Días de trabajo" />
+            <div className="flex flex-wrap gap-1.5">
+              {DIAS_SEMANA.map((d) => {
+                const activo = diasSeleccionados.includes(d.n);
+                return (
+                  <button
+                    key={d.n}
+                    type="button"
+                    onClick={() => {
+                      setDiasSeleccionados((prev) =>
+                        activo ? prev.filter((x) => x !== d.n) : [...prev, d.n]
+                      );
+                    }}
+                    className={`text-xs rounded-full border px-3 py-1.5 font-medium transition-all active:scale-95 ${
+                      activo
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Turno 1 */}
+            <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-neutral-700">Turno Principal</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-neutral-900" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Etiqueta label="Desde" sinMargen />
+                  <input
+                    type="time"
+                    value={turno1.hora_inicio}
+                    onChange={(e) => setTurno1({ ...turno1, hora_inicio: e.target.value })}
+                    className="campo-admin py-1.5 text-xs"
+                    required
+                  />
+                </div>
+                <div>
+                  <Etiqueta label="Hasta" sinMargen />
+                  <input
+                    type="time"
+                    value={turno1.hora_fin}
+                    onChange={(e) => setTurno1({ ...turno1, hora_fin: e.target.value })}
+                    className="campo-admin py-1.5 text-xs"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Turno 2 (Doble Turno) */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              dobleTurno 
+                ? "bg-white border-neutral-200 shadow-sm" 
+                : "bg-neutral-100/50 border-neutral-200 opacity-60"
+            } space-y-3`}>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={dobleTurno}
+                    onChange={(e) => setDobleTurno(e.target.checked)}
+                    className="rounded text-neutral-900 focus:ring-neutral-900"
+                  />
+                  <span className="text-xs font-semibold text-neutral-700">Doble Turno (Tarde)</span>
+                </label>
+              </div>
+              
+              {dobleTurno && (
+                <div className="grid grid-cols-2 gap-2 fade-in">
+                  <div>
+                    <Etiqueta label="Desde" sinMargen />
+                    <input
+                      type="time"
+                      value={turno2.hora_inicio}
+                      onChange={(e) => setTurno2({ ...turno2, hora_inicio: e.target.value })}
+                      className="campo-admin py-1.5 text-xs"
+                      required={dobleTurno}
+                    />
+                  </div>
+                  <div>
+                    <Etiqueta label="Hasta" sinMargen />
+                    <input
+                      type="time"
+                      value={turno2.hora_fin}
+                      onChange={(e) => setTurno2({ ...turno2, hora_fin: e.target.value })}
+                      className="campo-admin py-1.5 text-xs"
+                      required={dobleTurno}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={autocompletando || diasSeleccionados.length === 0}
+              className="flex items-center gap-2 rounded-full bg-neutral-900 text-white px-5 py-2.5 text-xs uppercase tracking-[0.1em] font-medium hover:bg-neutral-800 disabled:opacity-50 transition-colors shadow-sm"
+            >
+              {autocompletando ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {autocompletando ? "Generando..." : "Autocompletar semana"}
+            </button>
+            <p className="text-[10px] text-neutral-400 italic">
+              * Esto borrará los horarios recurrentes cargados de este profesional y aplicará la plantilla.
+            </p>
+          </div>
         </form>
       </div>
 

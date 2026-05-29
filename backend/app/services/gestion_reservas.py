@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.cliente import Cliente
 from app.models.enums import EstadoReserva
+from app.models.negocio import Negocio
 from app.models.reserva import Reserva
 from app.services.recordatorios import (
     cancelar_pendientes_de_reserva,
@@ -15,6 +16,7 @@ from app.services.recordatorios import (
     programar_por_inasistencia,
 )
 from app.services.segmentacion import recalcular_segmento
+from app.services.notificaciones import enviar_notificacion_satisfaccion
 
 
 def _cliente(reserva: Reserva, db: Session) -> Cliente:
@@ -77,6 +79,17 @@ def marcar_asistencia(
         cliente.turnos_completados += 1
         cliente.ultima_visita = reserva.inicio
         programar_por_frecuencia(reserva, db)
+        
+        # Enviar notificación de satisfacción para opinión/reseña
+        negocio = db.get(Negocio, reserva.negocio_id)
+        if negocio:
+            enviar_notificacion_satisfaccion(
+                db=db,
+                reserva=reserva,
+                negocio=negocio,
+                cliente_nombre=cliente.nombre,
+                cliente_email=cliente.email,
+            )
     else:  # no_show
         cliente.no_shows += 1
         programar_por_inasistencia(reserva, db)

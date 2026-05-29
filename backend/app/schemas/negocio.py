@@ -11,7 +11,9 @@ class NegocioBase(BaseModel):
     zona_horaria: str = "America/Argentina/Buenos_Aires"
     email_notificaciones: str | None = None
     logo: str | None = None
+    icono: str = "scissors"
     redes: str | None = None
+    mapa_url: str | None = None
 
 
 class NegocioCreate(NegocioBase):
@@ -25,23 +27,15 @@ class NegocioUpdate(BaseModel):
     zona_horaria: str | None = None
     email_notificaciones: str | None = None
     logo: str | None = None
+    icono: str | None = None
     redes: str | None = None
+    mapa_url: str | None = None
 
 
 class NegocioOut(NegocioBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     activo: bool
-
-
-class NegocioUpdate(BaseModel):
-    nombre: str | None = None
-    descripcion: str | None = None
-    direccion: str | None = None
-    zona_horaria: str | None = None
-    email_notificaciones: str | None = None
-    logo: str | None = None
-    redes: str | None = None
 
 
 class ProfesionalPublico(BaseModel):

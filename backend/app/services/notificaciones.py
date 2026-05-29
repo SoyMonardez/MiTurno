@@ -129,50 +129,111 @@ def _formato_fecha(dt: datetime, tz: ZoneInfo) -> str:
     return dt.astimezone(tz).strftime("%d/%m/%Y %H:%M")
 
 
-# Color de marca por defecto (diseño unificado; branding por negocio queda para más adelante).
-COLOR_MARCA = "#1e293b"
+# Paleta editorial (coincide con el frontend): negro + neutros.
+COLOR_NEGRO = "#0a0a0a"
+COLOR_TEXTO = "#171717"
+COLOR_SUAVE = "#737373"
+COLOR_BORDE = "#e5e5e5"
+FUENTE_SERIF = "Georgia, 'Times New Roman', serif"
+FUENTE_SANS = "Arial, Helvetica, sans-serif"
 
 
 def layout_html(negocio: Negocio, contenido_html: str) -> str:
-    """Envuelve el contenido en un email HTML con branding del negocio."""
-    logo = ""
+    """Envuelve el contenido en un email HTML con estética editorial."""
     if negocio.logo:
-        logo = (
+        marca = (
             f'<img src="{negocio.logo}" alt="{negocio.nombre}" '
-            f'style="max-height:48px;margin-bottom:8px;display:block;" />'
+            f'style="max-height:44px;margin:0 auto;display:block;" />'
         )
-    pie = f"{negocio.nombre}"
+    else:
+        marca = (
+            f'<div style="font-family:{FUENTE_SERIF};font-size:26px;letter-spacing:3px;'
+            f'text-transform:uppercase;color:#ffffff;">{negocio.nombre}</div>'
+        )
+
+    pie = negocio.nombre
     if negocio.direccion:
-        pie += f" · {negocio.direccion}"
+        pie += f" &middot; {negocio.direccion}"
+
     return f"""\
 <!doctype html>
 <html lang="es">
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
-  <div style="max-width:560px;margin:0 auto;padding:24px;">
-    <div style="background:{COLOR_MARCA};color:#ffffff;border-radius:12px 12px 0 0;padding:20px 24px;">
-      {logo}
-      <div style="font-size:20px;font-weight:bold;">{negocio.nombre}</div>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:{FUENTE_SANS};color:{COLOR_TEXTO};">
+  <div style="max-width:540px;margin:0 auto;padding:24px 16px;">
+    <!-- Header negro -->
+    <div style="background:{COLOR_NEGRO};padding:34px 24px;text-align:center;">
+      <div style="margin-bottom:10px;">
+        <span style="display:inline-block;width:36px;height:1px;background:rgba(255,255,255,0.35);vertical-align:middle;"></span>
+        <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.5);margin:0 10px;vertical-align:middle;"></span>
+        <span style="display:inline-block;width:36px;height:1px;background:rgba(255,255,255,0.35);vertical-align:middle;"></span>
+      </div>
+      {marca}
     </div>
-    <div style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:24px;">
+    <!-- Cuerpo -->
+    <div style="background:#ffffff;border:1px solid {COLOR_BORDE};border-top:none;padding:32px 28px;">
       {contenido_html}
     </div>
-    <p style="text-align:center;color:#94a3b8;font-size:12px;margin-top:16px;">{pie}</p>
+    <!-- Pie -->
+    <p style="text-align:center;color:#a3a3a3;font-size:10px;letter-spacing:1.5px;
+              text-transform:uppercase;margin:18px 0 0;">{pie}</p>
   </div>
 </body>
 </html>"""
 
 
+def _titulo(texto: str) -> str:
+    return (
+        f'<h1 style="font-family:{FUENTE_SERIF};font-size:22px;font-weight:normal;'
+        f'color:{COLOR_TEXTO};margin:0 0 6px;">{texto}</h1>'
+    )
+
+
+def _parrafo(texto: str) -> str:
+    return f'<p style="color:{COLOR_SUAVE};font-size:14px;line-height:1.6;margin:0 0 18px;">{texto}</p>'
+
+
 def _fila(etiqueta: str, valor: str) -> str:
     return (
-        f'<tr><td style="padding:6px 0;color:#64748b;font-size:14px;">{etiqueta}</td>'
-        f'<td style="padding:6px 0;text-align:right;font-size:14px;font-weight:600;">{valor}</td></tr>'
+        f'<tr>'
+        f'<td style="padding:9px 0;border-bottom:1px solid #f0f0f0;color:{COLOR_SUAVE};'
+        f'font-size:10px;letter-spacing:1.2px;text-transform:uppercase;">{etiqueta}</td>'
+        f'<td style="padding:9px 0;border-bottom:1px solid #f0f0f0;text-align:right;'
+        f'font-size:14px;color:{COLOR_TEXTO};">{valor}</td>'
+        f'</tr>'
     )
 
 
 def _boton(texto: str, enlace: str) -> str:
     return (
-        f'<a href="{enlace}" style="display:inline-block;background:{COLOR_MARCA};color:#ffffff;'
-        f'text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;">{texto}</a>'
+        f'<a href="{enlace}" style="display:inline-block;background:{COLOR_NEGRO};color:#ffffff;'
+        f'text-decoration:none;padding:14px 30px;font-size:11px;letter-spacing:2px;'
+        f'text-transform:uppercase;font-family:{FUENTE_SANS};">{texto}</a>'
+    )
+
+
+def _boton_borde(texto: str, enlace: str) -> str:
+    return (
+        f'<a href="{enlace}" style="display:inline-block;background:#ffffff;color:{COLOR_NEGRO};'
+        f'border:1px solid {COLOR_NEGRO};text-decoration:none;padding:13px 30px;font-size:11px;'
+        f'letter-spacing:2px;text-transform:uppercase;font-family:{FUENTE_SANS};">{texto}</a>'
+    )
+
+
+def link_google_calendar(
+    titulo: str, inicio: datetime, fin: datetime, descripcion: str = "", ubicacion: str = ""
+) -> str:
+    """Genera un enlace que abre Google Calendar con el evento precargado (sin descargas)."""
+    from urllib.parse import quote_plus
+
+    def _fmt(dt: datetime) -> str:
+        return dt.astimezone(ZoneInfo("UTC")).strftime("%Y%m%dT%H%M%SZ")
+
+    return (
+        "https://calendar.google.com/calendar/render?action=TEMPLATE"
+        f"&text={quote_plus(titulo)}"
+        f"&dates={_fmt(inicio)}/{_fmt(fin)}"
+        f"&details={quote_plus(descripcion)}"
+        f"&location={quote_plus(ubicacion)}"
     )
 
 
@@ -213,33 +274,71 @@ def enviar_confirmacion_reserva(
     )
     if negocio.direccion:
         filas += _fila("Dirección", negocio.direccion)
-    html_cliente = layout_html(
-        negocio,
-        f"""
-        <p style="font-size:16px;margin:0 0 4px;">¡Hola {cliente_nombre}! 👋</p>
-        <p style="color:#475569;margin:0 0 16px;">Tu reserva quedó <strong>confirmada</strong>.</p>
-        <table style="width:100%;border-collapse:collapse;border-top:1px solid #e2e8f0;
-                      border-bottom:1px solid #e2e8f0;margin-bottom:20px;">{filas}</table>
-        <p style="text-align:center;margin:0 0 8px;">{_boton("Cancelar reserva", enlace_cancelar)}</p>
-        <p style="text-align:center;color:#94a3b8;font-size:12px;margin:0;">
-          Podés cancelar hasta 20 minutos antes del turno.</p>
-        """,
-    )
-    ics = generar_ics(
+    enlace_calendario = link_google_calendar(
         titulo=f"{servicios_str} - {negocio.nombre}",
         inicio=reserva.inicio,
         fin=reserva.fin,
         descripcion=f"Profesional: {profesional_nombre}. Total: ${reserva.total_precio}.",
         ubicacion=negocio.direccion or negocio.nombre,
-        uid=f"reserva-{reserva.id}@miturno",
+    )
+    html_cliente = layout_html(
+        negocio,
+        f"""
+        {_titulo("Reserva confirmada")}
+        {_parrafo(f"Hola {cliente_nombre}, tu turno quedó reservado. Te esperamos.")}
+        <table style="width:100%;border-collapse:collapse;border-top:1px solid #f0f0f0;
+                      margin-bottom:24px;">{filas}</table>
+        <p style="text-align:center;margin:0 0 10px;">{_boton("Agregar al calendario", enlace_calendario)}</p>
+        <p style="text-align:center;margin:0 0 14px;">{_boton_borde("Cancelar reserva", enlace_cancelar)}</p>
+        <p style="text-align:center;color:#a3a3a3;font-size:11px;margin:0;">
+          Podés cancelar hasta 20 minutos antes del turno.</p>
+        """,
     )
     ok = _enviar_email(
         cliente_email,
         f"Reserva confirmada - {negocio.nombre}",
         cuerpo_cliente,
         html_cliente,
-        ics=ics,
     )
     _registrar(db, reserva.id, TipoNotificacion.confirmacion_cliente, cliente_email, ok)
     # El aviso de nuevas reservas al negocio se ve en el panel admin (auto-refresco),
     # por eso no se envía email al administrador.
+
+
+def enviar_notificacion_satisfaccion(
+    db: Session,
+    reserva: Reserva,
+    negocio: Negocio,
+    cliente_nombre: str,
+    cliente_email: str,
+) -> None:
+    """Envía un correo al cliente solicitando su opinión tras finalizar su turno."""
+    enlace_opinion = f"{settings.frontend_url}/{negocio.slug}?tab=resenas&opinar=true"
+
+    cuerpo = (
+        f"Hola {cliente_nombre},\n\n"
+        f"¡Gracias por visitarnos en {negocio.nombre}!\n\n"
+        f"Nos encantaría saber qué te pareció el servicio. "
+        f"Podés dejarnos tu opinión en el siguiente enlace:\n"
+        f"{enlace_opinion}\n\n"
+        f"¡Te esperamos pronto!"
+    )
+
+    html = layout_html(
+        negocio,
+        f"""
+        {_titulo("¿Cómo estuvo todo?")}
+        {_parrafo(f"Hola {cliente_nombre}, gracias por visitarnos. Tu opinión nos ayuda a mejorar y le sirve a otros clientes.")}
+        <p style="text-align:center;margin:0 0 14px;">{_boton("Dejar mi reseña", enlace_opinion)}</p>
+        <p style="text-align:center;color:#a3a3a3;font-size:11px;margin:0;">Te lleva menos de un minuto.</p>
+        """,
+    )
+
+    ok = _enviar_email(
+        cliente_email,
+        f"¿Qué te pareció el servicio en {negocio.nombre}?",
+        cuerpo,
+        html,
+    )
+    _registrar(db, reserva.id, TipoNotificacion.opinion_cliente, cliente_email, ok)
+

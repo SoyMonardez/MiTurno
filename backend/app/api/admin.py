@@ -482,6 +482,8 @@ def actualizar_negocio(
         negocio.logo = data.logo
     if data.redes is not None:
         negocio.redes = data.redes
+    if data.mapa_url is not None:
+        negocio.mapa_url = data.mapa_url
 
     db.commit()
     db.refresh(negocio)

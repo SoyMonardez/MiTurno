@@ -18,7 +18,9 @@ class Negocio(Base):
     zona_horaria: Mapped[str] = mapped_column(String(64), default="America/Argentina/Buenos_Aires")
     email_notificaciones: Mapped[str | None] = mapped_column(String(255), default=None)
     logo: Mapped[str | None] = mapped_column(String(500), default=None)
+    icono: Mapped[str] = mapped_column(String(40), default="scissors")
     redes: Mapped[str | None] = mapped_column(String(1000), default=None)
+    mapa_url: Mapped[str | None] = mapped_column(String(1000), default=None)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

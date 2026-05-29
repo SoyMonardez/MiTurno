@@ -1,12 +1,11 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-miturno}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-miturno}
       POSTGRES_DB: ${POSTGRES_DB:-miturno}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -14,18 +13,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - default
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: always
+    networks:
+      - default
 
   backend:
     build: ./backend
+    restart: always
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-miturno}:${POSTGRES_PASSWORD:-miturno}@db:5432/${POSTGRES_DB:-miturno}
       REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: http://localhost:5173
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       SECRET_KEY: ${SECRET_KEY:-cambiar-esta-clave-en-produccion}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -36,19 +39,20 @@ services:
       SMTP_TLS: ${SMTP_TLS:-true}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - default
 
   worker:
     build: ./backend
+    restart: always
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-miturno}:${POSTGRES_PASSWORD:-miturno}@db:5432/${POSTGRES_DB:-miturno}
       REDIS_URL: redis://redis:6379/0
@@ -59,38 +63,47 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-MiTurno <no-reply@miturno.local>}
       SMTP_TLS: ${SMTP_TLS:-true}
-    volumes:
-      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - default
 
   scheduler:
     build: ./backend
+    restart: always
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-miturno}:${POSTGRES_PASSWORD:-miturno}@db:5432/${POSTGRES_DB:-miturno}
       REDIS_URL: redis://redis:6379/0
-    volumes:
-      - ./backend:/app
     depends_on:
       redis:
         condition: service_started
     command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
+    networks:
+      - default
 
   frontend:
-    build: ./frontend
-    environment:
-      VITE_API_URL: http://localhost:8000
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    build:
+      context: ./frontend
+    restart: always
     depends_on:
       - backend
+    networks:
+      - default
+      - nginx_network
 
 volumes:
   pgdata:
+  uploads_data:
+
+networks:
+  default:
+    driver: bridge
+  nginx_network:
+    external: true
+    name: nginx_network

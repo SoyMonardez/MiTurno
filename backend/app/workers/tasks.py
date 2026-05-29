@@ -15,7 +15,13 @@ from app.models.enums import (
 from app.models.negocio import Negocio
 from app.models.notificacion import NotificacionLog, RecordatorioProgramado
 from app.models.reserva import Reserva
-from app.services.notificaciones import _boton, _enviar_email, layout_html
+from app.services.notificaciones import (
+    _boton,
+    _enviar_email,
+    _parrafo,
+    _titulo,
+    layout_html,
+)
 from app.workers.celery_app import celery_app
 
 _TIPO_NOTIF = {
@@ -69,19 +75,29 @@ def enviar_recordatorios_vencidos() -> int:
                 rec.estado = EstadoRecordatorio.cancelado
                 continue
 
-            asunto = f"Te esperamos en {negocio.nombre}"
             enlace = f"{settings.frontend_url}/{negocio.slug}"
-            mensaje = (
-                "¿Listo para tu próxima visita?"
-                if rec.tipo == TipoRecordatorio.frecuencia
-                else "Te extrañamos, ¡reagendá cuando quieras!"
-            )
+            if rec.tipo == TipoRecordatorio.turno_proximo:
+                asunto = f"Recordatorio de tu turno en {negocio.nombre}"
+                titulo = "Te esperamos mañana"
+                mensaje = "Este es un recordatorio de tu próximo turno. Si no podés asistir, avisanos con tiempo."
+                boton = "Ver el negocio"
+            elif rec.tipo == TipoRecordatorio.frecuencia:
+                asunto = f"¿Reservamos tu próxima visita en {negocio.nombre}?"
+                titulo = "¿Listo para volver?"
+                mensaje = "Pasó un tiempo desde tu última visita. Reservá tu próximo turno cuando quieras."
+                boton = "Reservar turno"
+            else:  # inasistencia
+                asunto = f"Te esperamos de nuevo en {negocio.nombre}"
+                titulo = "Te extrañamos"
+                mensaje = "La última vez no pudiste venir. Reagendá tu turno cuando te quede cómodo."
+                boton = "Reservar turno"
+
             html = layout_html(
                 negocio,
                 f"""
-                <p style="font-size:16px;margin:0 0 4px;">¡Hola {cliente.nombre}! 👋</p>
-                <p style="color:#475569;margin:0 0 20px;">{mensaje}</p>
-                <p style="text-align:center;">{_boton("Reservar turno", enlace)}</p>
+                {_titulo(titulo)}
+                {_parrafo(f"Hola {cliente.nombre}, {mensaje}")}
+                <p style="text-align:center;">{_boton(boton, enlace)}</p>
                 """,
             )
             ok = _enviar_email(cliente.email, asunto, _cuerpo(rec, negocio, cliente), html)

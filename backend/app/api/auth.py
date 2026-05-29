@@ -27,17 +27,23 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
     nombre: str
     negocio_id: int | None
+    rol: RolUsuario
 
 
 @router.post("/login", response_model=TokenOut)
 def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenOut:
-    usuario = db.scalar(select(Usuario).where(Usuario.username == data.username))
+    # Limpiamos espacios y caracteres invisibles para que el login no sea sensible a ellos.
+    username = data.username.strip()
+    dni = data.dni.strip()
+    password = data.password.strip()
+
+    usuario = db.scalar(select(Usuario).where(Usuario.username == username))
     credenciales_ok = (
         usuario is not None
         and usuario.activo
         and usuario.password_hash is not None
-        and usuario.dni == data.dni
-        and verify_password(data.password, usuario.password_hash)
+        and usuario.dni == dni
+        and verify_password(password, usuario.password_hash)
     )
     if not credenciales_ok:
         raise HTTPException(401, "Usuario, DNI o contraseña incorrectos")
@@ -50,6 +56,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenOut:
         access_token=crear_token(usuario.id, usuario.negocio_id),
         nombre=usuario.nombre,
         negocio_id=usuario.negocio_id,
+        rol=usuario.rol,
     )
 
 
@@ -68,4 +75,22 @@ def get_current_admin(
         raise HTTPException(401, "Usuario no válido")
     if usuario.rol not in (RolUsuario.admin, RolUsuario.super_admin):
         raise HTTPException(403, "Se requiere rol de administrador")
+    return usuario
+
+
+def get_current_super_admin(
+    cred: HTTPAuthorizationCredentials = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    try:
+        payload = decodificar_token(cred.credentials)
+        usuario_id = int(payload["sub"])
+    except Exception:
+        raise HTTPException(401, "Token inválido o expirado")
+
+    usuario = db.get(Usuario, usuario_id)
+    if not usuario or not usuario.activo:
+        raise HTTPException(401, "Usuario no válido")
+    if usuario.rol != RolUsuario.super_admin:
+        raise HTTPException(403, "Se requiere rol de super-admin")
     return usuario

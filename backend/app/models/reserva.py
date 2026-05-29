@@ -3,11 +3,12 @@ from datetime import datetime
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
-    UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,8 +19,15 @@ from app.models.enums import EstadoReserva
 class Reserva(Base):
     __tablename__ = "reservas"
     __table_args__ = (
-        # Evita que un profesional quede con dos reservas en el mismo horario.
-        UniqueConstraint("profesional_id", "inicio", name="uq_reserva_profesional_inicio"),
+        # Evita doble reserva del mismo profesional/horario, PERO solo para reservas
+        # confirmadas: una cancelada libera el slot para que se pueda volver a reservar.
+        Index(
+            "uq_reserva_prof_inicio_confirmada",
+            "profesional_id",
+            "inicio",
+            unique=True,
+            postgresql_where=text("estado = 'confirmada'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

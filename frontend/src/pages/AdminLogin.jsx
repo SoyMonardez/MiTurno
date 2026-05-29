@@ -19,10 +19,16 @@ export default function AdminLogin() {
     setEnviando(true);
     setError(null);
     try {
-      const res = await apiPost("/auth/login", form);
+      // Limpiamos espacios y caracteres invisibles (el login es sensible a eso)
+      const credenciales = {
+        username: form.username.trim(),
+        dni: form.dni.trim(),
+        password: form.password.trim(),
+      };
+      const res = await apiPost("/auth/login", credenciales);
       setToken(res.access_token);
       setNegocioId(res.negocio_id);
-      navigate("/admin");
+      navigate(res.rol === "super_admin" ? "/super-admin" : "/admin");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -33,7 +39,12 @@ export default function AdminLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-950 px-4">
       <SEO noIndex title="Panel de Administración - Iniciar Sesión | MiTurno" />
-      <form onSubmit={entrar} className="w-full max-w-sm scale-in">
+      <form
+        onSubmit={entrar}
+        method="post"
+        action="/admin/login"
+        className="w-full max-w-sm scale-in"
+      >
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
             <span className="h-px w-8 bg-white/30" />
@@ -48,9 +59,32 @@ export default function AdminLogin() {
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">{error}</div>
           )}
-          <Campo label="Usuario" value={form.username} onChange={campo("username")} />
-          <Campo label="DNI" value={form.dni} onChange={campo("dni")} />
-          <Campo label="Contraseña" type="password" value={form.password} onChange={campo("password")} />
+          <Campo
+            label="Usuario"
+            id="username"
+            name="username"
+            autoComplete="username"
+            value={form.username}
+            onChange={campo("username")}
+          />
+          <Campo
+            label="DNI"
+            id="dni"
+            name="dni"
+            autoComplete="off"
+            inputMode="numeric"
+            value={form.dni}
+            onChange={campo("dni")}
+          />
+          <Campo
+            label="Contraseña"
+            id="current-password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            value={form.password}
+            onChange={campo("password")}
+          />
           <button type="submit" disabled={enviando}
             className="w-full flex items-center justify-center gap-2 rounded-full bg-neutral-900 text-white py-3 text-xs uppercase tracking-[0.15em] font-medium hover:bg-neutral-800 disabled:opacity-50 transition-colors">
             <Lock size={14} strokeWidth={1.5} />
@@ -62,11 +96,11 @@ export default function AdminLogin() {
   );
 }
 
-function Campo({ label, ...props }) {
+function Campo({ label, id, ...props }) {
   return (
     <div>
-      <label className="block text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-1.5">{label}</label>
-      <input {...props} required className="campo-admin" />
+      <label htmlFor={id} className="block text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-1.5">{label}</label>
+      <input id={id} {...props} required className="campo-admin" />
     </div>
   );
 }

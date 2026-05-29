@@ -1,6 +1,7 @@
 import { ImagePlus, Loader2, UploadCloud, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { apiUpload } from "../api/client.js";
+import { useDialog } from "./Dialog.jsx";
 
 /**
  * Subida de imagen con drag & drop o selección de archivo.
@@ -14,11 +15,12 @@ export default function ImageUploader({ value, onChange, onError, alto = "h-40" 
   const inputRef = useRef(null);
   const [subiendo, setSubiendo] = useState(false);
   const [arrastrando, setArrastrando] = useState(false);
+  const dialog = useDialog();
 
   async function subir(file) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      onError?.(new Error("El archivo debe ser una imagen."));
+      await dialog.error("El archivo debe ser una imagen (JPG, PNG, WEBP o GIF).");
       return;
     }
     setSubiendo(true);
@@ -27,7 +29,7 @@ export default function ImageUploader({ value, onChange, onError, alto = "h-40" 
       onChange(res.url);
     } catch (err) {
       onError?.(err);
-      alert(err.message);
+      await dialog.error(err.message);
     } finally {
       setSubiendo(false);
     }

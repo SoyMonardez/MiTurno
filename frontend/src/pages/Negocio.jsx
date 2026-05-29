@@ -11,7 +11,6 @@ import {
   PenLine,
   Phone,
   Plus,
-  Scissors,
   Search,
   Shuffle,
   Star,
@@ -25,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiGet, apiPost } from "../api/client.js";
 import { emailValido, formatoPrecio, horaLocal, isoFecha } from "../lib/format.js";
+import { IconoNegocio } from "../lib/iconos.jsx";
 import SEO from "../components/SEO.jsx";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -155,7 +155,10 @@ export default function Negocio() {
   const { slug } = useParams();
   const [negocio, setNegocio] = useState(null);
   const [error, setError] = useState(null);
-  const [tab, setTab] = useState("servicios");
+  const [tab, setTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") || "servicios";
+  });
   const [busqueda, setBusqueda] = useState("");
   const [resenas, setResenas] = useState(null);
   const [portafolio, setPortafolio] = useState(null);
@@ -169,7 +172,24 @@ export default function Negocio() {
   const [franjas, setFranjas] = useState(null);
   const [cargandoSlots, setCargandoSlots] = useState(false);
   const [slot, setSlot] = useState(null);
-  const [datos, setDatos] = useState({ nombre: "", email: "", telefono: "" });
+  const [datos, setDatos] = useState(() => {
+    try {
+      const saved = localStorage.getItem("miturno_cliente_datos");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          nombre: parsed.nombre || "",
+          email: parsed.email || "",
+          telefono: parsed.telefono || "",
+        };
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return { nombre: "", email: "", telefono: "" };
+  });
+  const [recibirRecordatorios, setRecibirRecordatorios] = useState(true);
+  const [frecuenciaDias, setFrecuenciaDias] = useState(30);
   const [reserva, setReserva] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [errorModal, setErrorModal] = useState(null);
@@ -285,8 +305,13 @@ export default function Negocio() {
         profesional_id: slot.profesional_id,
         inicio: slot.inicio,
         cliente: datos,
-        frecuencia_recordatorio_dias: null,
+        frecuencia_recordatorio_dias: recibirRecordatorios ? frecuenciaDias : null,
       });
+      try {
+        localStorage.setItem("miturno_cliente_datos", JSON.stringify(datos));
+      } catch (err) {
+        console.error(err);
+      }
       setReserva(res);
       setPaso(4);
     } catch (e) {
@@ -300,7 +325,7 @@ export default function Negocio() {
     setSeleccion([]);
     setProfesionalId(null);
     setSlot(null);
-    setDatos({ nombre: "", email: "", telefono: "" });
+    // conservamos datos para evitar borrar el autocompletado
     setReserva(null);
     setModalAbierto(false);
     setPaso(1);
@@ -358,6 +383,7 @@ export default function Negocio() {
                 busqueda={busqueda}
                 setBusqueda={setBusqueda}
                 onToggle={toggleServicio}
+                icono={negocio.icono}
               />
             )}
             {tab === "detalles" && <TabDetalles negocio={negocio} portafolio={portafolio} />}
@@ -403,6 +429,10 @@ export default function Negocio() {
           onConfirmar={confirmar}
           onCerrar={() => setModalAbierto(false)}
           onReset={resetear}
+          recibirRecordatorios={recibirRecordatorios}
+          setRecibirRecordatorios={setRecibirRecordatorios}
+          frecuenciaDias={frecuenciaDias}
+          setFrecuenciaDias={setFrecuenciaDias}
         />
       )}
     </div>
@@ -430,7 +460,7 @@ function NegocioHeader({ negocio }) {
         <div className="fade-up">
           <div className="flex items-center justify-center gap-3 mb-2">
             <span className="h-px w-8 bg-white/40" />
-            <Scissors size={16} className="text-white/60" strokeWidth={1.5} />
+            <IconoNegocio clave={negocio.icono} size={16} className="text-white/60" strokeWidth={1.5} />
             <span className="h-px w-8 bg-white/40" />
           </div>
           <h1 className="font-serif text-4xl tracking-[0.08em] uppercase leading-tight">
@@ -480,7 +510,7 @@ function Stats({ negocio, cantServicios }) {
 
 // ─── Tab Servicios ────────────────────────────────────────────────────────────
 
-function TabServicios({ servicios, categorias, seleccion, busqueda, setBusqueda, onToggle }) {
+function TabServicios({ servicios, categorias, seleccion, busqueda, setBusqueda, onToggle, icono }) {
   const [catActiva, setCatActiva] = useState(null);
 
   // Solo mostrar categorías que tengan al menos un servicio visible
@@ -536,11 +566,12 @@ function TabServicios({ servicios, categorias, seleccion, busqueda, setBusqueda,
             servicio={s}
             seleccionado={seleccion.includes(s.id)}
             onToggle={() => onToggle(s.id)}
+            icono={icono}
           />
         ))}
         {visibles.length === 0 && (
           <div className="text-center py-16 text-neutral-300">
-            <Scissors size={32} className="mx-auto mb-3" strokeWidth={1} />
+            <IconoNegocio clave={icono} size={32} className="mx-auto mb-3" strokeWidth={1} />
             <p className="text-sm text-neutral-400">No se encontraron servicios</p>
           </div>
         )}
@@ -549,7 +580,7 @@ function TabServicios({ servicios, categorias, seleccion, busqueda, setBusqueda,
   );
 }
 
-function ServicioCard({ servicio: s, seleccionado, onToggle }) {
+function ServicioCard({ servicio: s, seleccionado, onToggle, icono }) {
   return (
     <div
       className={`flex gap-4 p-3 rounded-2xl border transition-all ${
@@ -566,15 +597,26 @@ function ServicioCard({ servicio: s, seleccionado, onToggle }) {
         />
       ) : (
         <div className="w-24 h-24 rounded-xl bg-neutral-100 flex items-center justify-center flex-shrink-0">
-          <Scissors size={26} className="text-neutral-300" strokeWidth={1} />
+          <IconoNegocio clave={icono} size={26} className="text-neutral-300" strokeWidth={1} />
         </div>
       )}
 
       <div className="flex-1 min-w-0 py-0.5">
         {s.badge && s.badge !== "ninguno" && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-500 mb-1">
-            <span className="h-1 w-1 rounded-full bg-neutral-900" />
-            {s.badge === "popular" ? "Popular" : s.badge}
+          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] mb-1 ${
+            s.badge === "hot" ? "text-orange-600 bg-orange-50 border border-orange-200/50 rounded px-1.5 py-0.5" : "text-neutral-500"
+          }`}>
+            {s.badge === "hot" ? (
+              <>
+                <span>🔥</span>
+                <span>Mas pedido</span>
+              </>
+            ) : (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-neutral-900" />
+                {s.badge === "popular" ? "Popular" : s.badge === "recomendado" ? "Recomendado" : s.badge === "nuevo" ? "Nuevo" : s.badge}
+              </>
+            )}
           </span>
         )}
         <h3 className="font-serif text-base text-neutral-900 leading-snug">{s.nombre}</h3>
@@ -632,7 +674,7 @@ function TabDetalles({ negocio, portafolio }) {
           <div>
             <p className="text-sm text-neutral-800">{negocio.direccion}</p>
             <a
-              href={`https://maps.google.com/?q=${encodeURIComponent(negocio.direccion)}`}
+              href={negocio.mapa_url || `https://maps.google.com/?q=${encodeURIComponent(negocio.direccion)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 mt-1 transition-colors"
@@ -717,13 +759,30 @@ function TabDetalles({ negocio, portafolio }) {
 // ─── Tab Reseñas ──────────────────────────────────────────────────────────────
 
 function TabResenas({ resenas, setResenas, negocio }) {
-  const [mostrando, setMostrando] = useState("lista");
-  const [form, setForm] = useState({
-    autor_nombre: "",
-    autor_email: "",
-    puntuacion: 0,
-    profesional_id: null,
-    comentario: "",
+  const [mostrando, setMostrando] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("opinar") === "true" ? "form" : "lista";
+  });
+  const [form, setForm] = useState(() => {
+    let savedNombre = "";
+    let savedEmail = "";
+    try {
+      const saved = localStorage.getItem("miturno_cliente_datos");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        savedNombre = parsed.nombre || "";
+        savedEmail = parsed.email || "";
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      autor_nombre: savedNombre,
+      autor_email: savedEmail,
+      puntuacion: 0,
+      profesional_id: null,
+      comentario: "",
+    };
   });
   const [enviando, setEnviando] = useState(false);
   const [exito, setExito] = useState(false);
@@ -745,7 +804,23 @@ function TabResenas({ resenas, setResenas, negocio }) {
       setTimeout(() => {
         setMostrando("lista");
         setExito(false);
-        setForm({ autor_nombre: "", autor_email: "", puntuacion: 0, profesional_id: null, comentario: "" });
+        let savedNombre = "";
+        let savedEmail = "";
+        try {
+          const saved = localStorage.getItem("miturno_cliente_datos");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            savedNombre = parsed.nombre || "";
+            savedEmail = parsed.email || "";
+          }
+        } catch (e) {}
+        setForm({
+          autor_nombre: savedNombre,
+          autor_email: savedEmail,
+          puntuacion: 0,
+          profesional_id: null,
+          comentario: "",
+        });
       }, 2000);
     } catch (err) {
       setError(err.message);
@@ -1091,6 +1166,7 @@ function ModalReserva({
   negocio, serviciosElegidos, totalPrecio, totalDuracion, paso, setPaso,
   profesionalId, setProfesionalId, fechaObj, setFechaObj, franjas, cargandoSlots,
   slot, setSlot, datos, setDatos, reserva, enviando, error, onConfirmar, onCerrar, onReset,
+  recibirRecordatorios, setRecibirRecordatorios, frecuenciaDias, setFrecuenciaDias,
 }) {
   const puedeAvanzar = useMemo(() => {
     if (paso === 1) return true;
@@ -1169,7 +1245,16 @@ function ModalReserva({
               totalDuracion={totalDuracion} profesionalId={profesionalId} negocio={negocio}
             />
           )}
-          {paso === 3 && <PasoDatosContacto datos={datos} setDatos={setDatos} />}
+          {paso === 3 && (
+            <PasoDatosContacto
+              datos={datos}
+              setDatos={setDatos}
+              recibirRecordatorios={recibirRecordatorios}
+              setRecibirRecordatorios={setRecibirRecordatorios}
+              frecuenciaDias={frecuenciaDias}
+              setFrecuenciaDias={setFrecuenciaDias}
+            />
+          )}
           {paso === 4 && reserva && (
             <PasoConfirmacion reserva={reserva} datos={datos} negocio={negocio} onReset={onReset} />
           )}
@@ -1392,7 +1477,11 @@ function PasoFechaHora({
 
 // ─── Paso 3: Datos ────────────────────────────────────────────────────────────
 
-function PasoDatosContacto({ datos, setDatos }) {
+function PasoDatosContacto({
+  datos, setDatos,
+  recibirRecordatorios, setRecibirRecordatorios,
+  frecuenciaDias, setFrecuenciaDias,
+}) {
   function set(k) {
     return (e) => setDatos({ ...datos, [k]: e.target.value });
   }
@@ -1419,6 +1508,38 @@ function PasoDatosContacto({ datos, setDatos }) {
           </div>
           <input value={datos.telefono} onChange={set("telefono")} placeholder="Número" className="campo-modal flex-1" />
         </div>
+      </div>
+
+      {/* Recordatorios y Frecuencia */}
+      <div className="pt-2 border-t border-neutral-100 space-y-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={recibirRecordatorios}
+            onChange={(e) => setRecibirRecordatorios(e.target.checked)}
+            className="rounded text-neutral-900 focus:ring-neutral-900 border-neutral-300"
+          />
+          <span className="text-xs font-medium text-neutral-700">
+            ¿Querés recibir recordatorios para próximas citas?
+          </span>
+        </label>
+
+        {recibirRecordatorios && (
+          <div className="fade-in space-y-1.5">
+            <label className="block text-[10px] uppercase tracking-[0.2em] text-neutral-400">
+              ¿Con qué frecuencia te gustaría volver?
+            </label>
+            <select
+              value={frecuenciaDias}
+              onChange={(e) => setFrecuenciaDias(Number(e.target.value))}
+              className="campo-modal w-full bg-white"
+            >
+              <option value={15}>Cada 15 días</option>
+              <option value={30}>Una vez al mes (recomendado)</option>
+              <option value={60}>Cada 2 meses</option>
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );

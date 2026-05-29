@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # Seguridad / JWT.
     secret_key: str = "cambiar-esta-clave-en-produccion"
-    token_exp_minutes: int = 60 * 8
+    token_exp_minutes: int = 60 * 24 * 30  # 30 días: sesión persistente
 
     # Regla de negocio: anticipación mínima para cancelar (minutos).
     cancelacion_min_anticipacion: int = 20

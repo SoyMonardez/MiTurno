@@ -15,6 +15,7 @@ from app.api import (
     resenas,
     reservas,
     seo,
+    superadmin,
     uploads,
 )
 from app.core.config import settings
@@ -39,6 +40,7 @@ app.include_router(resenas.router)
 app.include_router(portafolio.router)
 app.include_router(admin.router)
 app.include_router(uploads.router)
+app.include_router(superadmin.router)
 app.include_router(seo.router)
 
 # Archivos subidos (imágenes de servicios / profesionales)

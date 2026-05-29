@@ -16,6 +16,17 @@ class HorarioCreate(HorarioBase):
     pass
 
 
+class HorarioRango(BaseModel):
+    hora_inicio: time
+    hora_fin: time
+
+
+class HorariosBulkCreate(BaseModel):
+    dias_semana: list[int]
+    rangos: list[HorarioRango]
+    limpiar_existentes: bool = True
+
+
 class HorarioOut(HorarioBase):
     model_config = ConfigDict(from_attributes=True)
     id: int

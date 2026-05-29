@@ -14,6 +14,7 @@ from app.schemas.profesional import (
     ProfesionalCreate,
     ProfesionalOut,
     ProfesionalUpdate,
+    HorariosBulkCreate,
 )
 
 router = APIRouter(tags=["profesionales"])
@@ -114,6 +115,37 @@ def crear_horario(
     db.commit()
     db.refresh(horario)
     return horario
+
+
+@router.post("/profesionales/{profesional_id}/horarios/bulk", status_code=204)
+def crear_horarios_bulk(
+    profesional_id: int, data: HorariosBulkCreate, db: Session = Depends(get_db)
+) -> None:
+    if not db.get(Profesional, profesional_id):
+        raise HTTPException(404, "Profesional no encontrado")
+    
+    from sqlalchemy import delete
+    
+    if data.limpiar_existentes:
+        db.execute(
+            delete(HorarioRecurrente).where(
+                HorarioRecurrente.profesional_id == profesional_id
+            )
+        )
+        
+    for dia in data.dias_semana:
+        for rango in data.rangos:
+            if rango.hora_fin <= rango.hora_inicio:
+                raise HTTPException(400, "hora_fin debe ser posterior a hora_inicio")
+            horario = HorarioRecurrente(
+                profesional_id=profesional_id,
+                dia_semana=dia,
+                hora_inicio=rango.hora_inicio,
+                hora_fin=rango.hora_fin,
+            )
+            db.add(horario)
+            
+    db.commit()
 
 
 @router.get("/profesionales/{profesional_id}/horarios", response_model=list[HorarioOut])

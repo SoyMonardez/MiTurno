@@ -12,6 +12,7 @@ class BadgeServicio(str, enum.Enum):
     recomendado = "recomendado"
     popular = "popular"
     nuevo = "nuevo"
+    hot = "hot"
 
 
 class SegmentoCliente(str, enum.Enum):
@@ -51,6 +52,7 @@ class TipoNotificacion(str, enum.Enum):
     recordatorio_frecuencia = "recordatorio_frecuencia"
     sugerencia_inasistencia = "sugerencia_inasistencia"
     recordatorio_turno = "recordatorio_turno"
+    opinion_cliente = "opinion_cliente"
 
 
 class EstadoNotificacion(str, enum.Enum):
