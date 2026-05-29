@@ -172,3 +172,30 @@ def eliminar_excepcion(excepcion_id: int, db: Session = Depends(get_db)) -> None
         raise HTTPException(404, "Excepción no encontrada")
     db.delete(excepcion)
     db.commit()
+
+
+@router.delete("/profesionales/{profesional_id}", status_code=204)
+def eliminar_profesional(profesional_id: int, db: Session = Depends(get_db)) -> None:
+    profesional = db.get(Profesional, profesional_id)
+    if not profesional:
+        raise HTTPException(404, "Profesional no encontrado")
+    
+    # Desvincular servicios N:N
+    profesional.servicios = []
+    
+    # Eliminar dependencias
+    for h in profesional.horarios:
+        db.delete(h)
+    for e in profesional.excepciones:
+        db.delete(e)
+        
+    from sqlalchemy.exc import IntegrityError
+    try:
+        db.delete(profesional)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            400,
+            "No se puede eliminar el profesional porque tiene reservas asociadas. Habilita o deshabilita sus servicios en su lugar."
+        )

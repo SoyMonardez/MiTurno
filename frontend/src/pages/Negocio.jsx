@@ -329,7 +329,7 @@ function NegocioHeader({ negocio }) {
         <img
           src={negocio.logo}
           alt={negocio.nombre}
-          className="h-16 mx-auto mb-4 object-contain fade-in"
+          className="w-24 h-24 mx-auto mb-4 object-cover rounded-2xl border border-neutral-800/80 shadow-lg fade-in"
           loading="eager"
           decoding="async"
         />

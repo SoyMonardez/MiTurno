@@ -921,6 +921,18 @@ function Profesionales({ negocioId, onError }) {
 function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
   const [ids, setIds] = useState(profesional.servicio_ids);
   const [guardando, setGuardando] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [form, setForm] = useState({
+    nombre: profesional.nombre,
+    bio: profesional.bio || "",
+    foto: profesional.foto || "",
+    servicio_ids: profesional.servicio_ids,
+  });
+
+  useEffect(() => {
+    setIds(profesional.servicio_ids);
+  }, [profesional.servicio_ids]);
+
   const cambiado =
     ids.length !== profesional.servicio_ids.length || ids.some((x) => !profesional.servicio_ids.includes(x));
 
@@ -941,9 +953,44 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
     }
   }
 
+  async function guardarEdicion(e) {
+    e.preventDefault();
+    if (!form.nombre.trim()) return;
+    setGuardando(true);
+    try {
+      await apiPatch(`/profesionales/${profesional.id}`, {
+        nombre: form.nombre,
+        bio: form.bio || null,
+        foto: form.foto || null,
+        servicio_ids: form.servicio_ids,
+      });
+      setEditando(false);
+      onSaved();
+    } catch (err) {
+      onError(err);
+      alert(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function eliminar() {
+    if (!confirm(`¿Seguro que querés eliminar al profesional ${profesional.nombre}? Esta acción no se puede deshacer.`)) return;
+    setGuardando(true);
+    try {
+      await apiDelete(`/profesionales/${profesional.id}`);
+      onSaved();
+    } catch (err) {
+      onError(err);
+      alert(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           {profesional.foto ? (
             <img src={profesional.foto} alt={profesional.nombre} className="w-10 h-10 rounded-full object-cover" />
@@ -957,25 +1004,104 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
             {profesional.bio && <p className="text-xs text-neutral-400">{profesional.bio}</p>}
           </div>
         </div>
-        {cambiado && (
-          <button onClick={guardar} disabled={guardando}
-            className="flex items-center gap-1.5 rounded-full bg-neutral-900 text-white px-4 py-1.5 text-xs uppercase tracking-[0.1em] disabled:opacity-50">
-            {guardando ? <Loader2 size={12} className="animate-spin" /> : null}
-            {guardando ? "Guardando" : "Guardar"}
+        <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t border-neutral-100 sm:border-0 flex-shrink-0">
+          {cambiado && (
+            <button onClick={guardar} disabled={guardando}
+              className="flex items-center gap-1.5 rounded-full bg-neutral-900 text-white px-4 py-1.5 text-xs uppercase tracking-[0.1em] disabled:opacity-50">
+              {guardando ? <Loader2 size={12} className="animate-spin" /> : null}
+              {guardando ? "Guardando" : "Guardar"}
+            </button>
+          )}
+          <button onClick={() => {
+            setForm({
+              nombre: profesional.nombre,
+              bio: profesional.bio || "",
+              foto: profesional.foto || "",
+              servicio_ids: profesional.servicio_ids,
+            });
+            setEditando(true);
+          }}
+            className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-50 border border-transparent hover:border-neutral-200">
+            <Pencil size={12} /> Editar
           </button>
-        )}
-      </div>
-      <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-2">Servicios habilitados</p>
-      <div className="flex flex-wrap gap-2">
-        {servicios.map((s) => (
-          <button key={s.id} onClick={() => toggle(s.id)}
-            className={`text-xs rounded-full border px-2.5 py-1 transition-colors ${
-              ids.includes(s.id) ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"
-            }`}>
-            {s.nombre}
+          <button onClick={eliminar} disabled={guardando}
+            className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-200 disabled:opacity-50">
+            <Trash2 size={12} /> Eliminar
           </button>
-        ))}
+        </div>
       </div>
+
+      {!editando && (
+        <>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-2">Servicios habilitados</p>
+          <div className="flex flex-wrap gap-2">
+            {servicios.map((s) => (
+              <button key={s.id} onClick={() => toggle(s.id)}
+                className={`text-xs rounded-full border px-2.5 py-1 transition-colors ${
+                  ids.includes(s.id) ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"
+                }`}>
+                {s.nombre}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {editando && (
+        <form onSubmit={guardarEdicion} className="px-1 pb-2 pt-1 border-t border-neutral-100 space-y-4">
+          <div className="grid md:grid-cols-[160px_1fr] gap-4 pt-3">
+            <div>
+              <Etiqueta icono={<ImageIcon size={12} />} label="Foto" />
+              <ImageUploader value={form.foto} onChange={(url) => setForm({ ...form, foto: url })} onError={onError} alto="h-32" />
+            </div>
+            <div className="space-y-3">
+              <div>
+                <Etiqueta icono={<User size={12} />} label="Nombre completo" req />
+                <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className="campo-admin" required />
+              </div>
+              <div>
+                <Etiqueta icono={<BookOpen size={12} />} label="Descripción breve" />
+                <input value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="campo-admin" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <Etiqueta icono={<Tag size={12} />} label="Servicios habilitados" />
+            <div className="flex flex-wrap gap-2">
+              {servicios.map((s) => {
+                const activo = form.servicio_ids.includes(s.id);
+                return (
+                  <button type="button" key={s.id}
+                    onClick={() => {
+                      setForm({
+                        ...form,
+                        servicio_ids: activo
+                          ? form.servicio_ids.filter((x) => x !== s.id)
+                          : [...form.servicio_ids, s.id],
+                      });
+                    }}
+                    className={`text-xs rounded-full border px-2.5 py-1 transition-colors ${
+                      activo ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"
+                    }`}>
+                    {s.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={guardando}
+              className="flex items-center gap-1.5 rounded-full bg-neutral-900 text-white px-5 py-2 text-xs uppercase tracking-[0.1em] disabled:opacity-50">
+              {guardando ? <Loader2 size={12} className="animate-spin" /> : null}
+              {guardando ? "Guardando" : "Guardar"}
+            </button>
+            <button type="button" onClick={() => setEditando(false)}
+              className="rounded-full border border-neutral-300 px-5 py-2 text-xs uppercase tracking-[0.1em] text-neutral-600 hover:bg-neutral-50">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
