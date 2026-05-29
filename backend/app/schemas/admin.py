@@ -81,3 +81,7 @@ class DashboardOut(BaseModel):
     turnos_semana: int
     proximos: list[ReservaAdminOut]
     accesos_recientes: list[AccesoOut]
+
+
+class SugerenciaCategoriasOut(BaseModel):
+    categorias: list[str]

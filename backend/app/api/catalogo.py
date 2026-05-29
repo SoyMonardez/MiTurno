@@ -123,5 +123,25 @@ def eliminar_servicio(servicio_id: int, db: Session = Depends(get_db)) -> None:
     servicio = db.get(Servicio, servicio_id)
     if not servicio:
         raise HTTPException(404, "Servicio no encontrado")
-    servicio.activo = False
-    db.commit()
+    
+    # Desvincular de profesionales (tabla N:N)
+    from app.models.profesional import profesional_servicio
+    db.execute(
+        profesional_servicio.delete().where(
+            profesional_servicio.c.servicio_id == servicio_id
+        )
+    )
+    
+    from sqlalchemy.exc import IntegrityError
+    try:
+        db.delete(servicio)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Fallback a desactivar si tiene reservas
+        servicio.activo = False
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede eliminar el servicio porque tiene reservas asociadas. Se ha desactivado en su lugar."
+        )

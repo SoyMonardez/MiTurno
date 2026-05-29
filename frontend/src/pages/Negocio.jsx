@@ -64,6 +64,74 @@ function IconInstagram({ size = 16, className = "" }) {
   );
 }
 
+function renderSocialIcon(type, size = 16) {
+  switch (type) {
+    case "instagram":
+      return <IconInstagram size={size} className="text-neutral-900" />;
+    case "whatsapp":
+      return (
+        <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-900">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+        </svg>
+      );
+    case "facebook":
+      return (
+        <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-900">
+          <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+        </svg>
+      );
+    case "tiktok":
+      return (
+        <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-900">
+          <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5" />
+        </svg>
+      );
+    default:
+      return <Globe size={size} className="text-neutral-900" strokeWidth={1.5} />;
+  }
+}
+
+function parseRedes(redesString) {
+  if (!redesString) return [];
+  const items = redesString.split(/[\s,]+/).filter(Boolean);
+  return items.map(item => {
+    const url = item.startsWith("@")
+      ? `https://instagram.com/${item.slice(1)}`
+      : item.startsWith("http")
+      ? item
+      : `https://${item}`;
+    
+    let label = item;
+    let iconType = "globe";
+    
+    const lower = item.toLowerCase();
+    if (lower.includes("instagram.com") || item.startsWith("@")) {
+      iconType = "instagram";
+      const parts = item.split("instagram.com/");
+      const user = parts[1]?.split(/[?#]/)[0] || item;
+      label = user.startsWith("@") ? user : `@${user.replace(/^\/+|\/+$/g, "")}`;
+    } else if (lower.includes("facebook.com") || lower.includes("fb.me")) {
+      iconType = "facebook";
+      const parts = item.split(/(?:facebook\.com|fb\.me)\//);
+      label = parts[1]?.split(/[?#]/)[0] || "Facebook";
+      label = label.replace(/^\/+|\/+$/g, "");
+    } else if (lower.includes("tiktok.com")) {
+      iconType = "tiktok";
+      const parts = item.split("tiktok.com/");
+      let user = parts[1]?.split(/[?#]/)[0] || "TikTok";
+      user = user.replace(/^\/+|\/+$/g, "");
+      label = user.startsWith("@") ? user : `@${user}`;
+    } else if (lower.includes("wa.me") || lower.includes("whatsapp.com") || lower.includes("api.whatsapp")) {
+      iconType = "whatsapp";
+      label = "WhatsApp";
+    } else {
+      label = item.replace(/^(https?:\/\/)?(www\.)?/, "").replace(/\/+$/, "");
+    }
+    
+    return { url, label, iconType };
+  });
+}
+
 // ─── Estrellas (icono, nunca texto) ───────────────────────────────────────────
 
 function Estrellas({ valor = 0, size = 14 }) {
@@ -584,41 +652,41 @@ function TabDetalles({ negocio, portafolio }) {
       {(negocio.redes || negocio.email_notificaciones) && (
         <div className="rounded-2xl border border-neutral-200 p-5 space-y-4">
           <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Contacto y Redes</p>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-2.5">
             {negocio.email_notificaciones && (
-              <div className="flex items-center gap-3">
-                <Mail size={16} className="text-neutral-900" strokeWidth={1.5} />
-                <a
-                  href={`mailto:${negocio.email_notificaciones}`}
-                  className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
-                >
-                  {negocio.email_notificaciones}
-                </a>
-              </div>
+              <a
+                href={`mailto:${negocio.email_notificaciones}`}
+                className="flex items-center justify-between p-3.5 rounded-xl border border-neutral-100 bg-neutral-50 hover:bg-neutral-100 hover:border-neutral-200 transition-all group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-neutral-200/60 shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <Mail size={14} className="text-neutral-900" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-sm font-medium text-neutral-700 truncate">{negocio.email_notificaciones}</span>
+                </div>
+                <ArrowRight size={14} className="text-neutral-400 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all flex-shrink-0" />
+              </a>
             )}
-            {negocio.redes && (
-              <div className="flex items-center gap-3">
-                {negocio.redes.includes("instagram.com") || negocio.redes.startsWith("@") ? (
-                  <IconInstagram size={16} className="text-neutral-900" />
-                ) : (
-                  <Globe size={16} className="text-neutral-900" strokeWidth={1.5} />
-                )}
-                <a
-                  href={
-                    negocio.redes.startsWith("@")
-                      ? `https://instagram.com/${negocio.redes.slice(1)}`
-                      : negocio.redes.startsWith("http")
-                      ? negocio.redes
-                      : `https://${negocio.redes}`
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors underline decoration-dotted"
-                >
-                  {negocio.redes}
-                </a>
-              </div>
-            )}
+            {negocio.redes && parseRedes(negocio.redes).map((red, idx) => (
+              <a
+                key={idx}
+                href={red.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-neutral-100 bg-neutral-50 hover:bg-neutral-100 hover:border-neutral-200 transition-all group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-neutral-200/60 shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform">
+                    {renderSocialIcon(red.iconType, 14)}
+                  </div>
+                  <span className="text-sm font-semibold text-neutral-850 truncate">{red.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-neutral-450">
+                  <span className="text-[10px] uppercase tracking-wider font-medium opacity-0 group-hover:opacity-100 transition-opacity">Visitar</span>
+                  <ArrowRight size={14} className="text-neutral-900 -translate-x-1 group-hover:translate-x-0 transition-transform flex-shrink-0" />
+                </div>
+              </a>
+            ))}
           </div>
         </div>
       )}

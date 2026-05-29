@@ -75,6 +75,8 @@ function Categorias({ negocioId, onError }) {
   const [editandoId, setEditandoId] = useState(null);
   const [editandoNombre, setEditandoNombre] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [sugerencias, setSugerencias] = useState([]);
+  const [sugeridorCargando, setSugeridorCargando] = useState(false);
 
   const cargar = useCallback(() => {
     apiGet(`/negocios/${negocioId}/categorias`)
@@ -85,6 +87,38 @@ function Categorias({ negocioId, onError }) {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  async function obtenerSugerencias() {
+    setSugeridorCargando(true);
+    try {
+      const miNegocio = await apiGet("/negocios/mi-negocio");
+      const res = await apiPost("/admin/ia/sugerir-categorias", { texto: miNegocio.nombre || "" });
+      if (res.categorias) {
+        setSugerencias(res.categorias);
+      }
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSugeridorCargando(false);
+    }
+  }
+
+  async function crearCategoriaSugerida(nombre) {
+    setCargando(true);
+    try {
+      await apiPost(`/negocios/${negocioId}/categorias`, {
+        nombre,
+        orden: categorias ? categorias.length : 0,
+      });
+      setSugerencias((prev) => prev.filter((x) => x !== nombre));
+      cargar();
+    } catch (err) {
+      onError(err);
+      alert(err.message);
+    } finally {
+      setCargando(false);
+    }
+  }
 
   async function crear(e) {
     e.preventDefault();
@@ -157,6 +191,46 @@ function Categorias({ negocioId, onError }) {
             Agregar
           </button>
         </form>
+      </div>
+
+      {/* Asistente de Categorías con IA */}
+      <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6 max-w-xl">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-neutral-700" strokeWidth={1.5} />
+            <h3 className="font-serif text-base text-neutral-900">Sugerir categorías con IA</h3>
+          </div>
+          <button
+            type="button"
+            onClick={obtenerSugerencias}
+            disabled={sugeridorCargando}
+            className="flex items-center gap-1.5 text-xs bg-white border border-neutral-200 text-neutral-955 rounded-full px-3 py-1 font-medium hover:bg-neutral-100 active:scale-95 transition-all shadow-sm disabled:opacity-50"
+          >
+            {sugeridorCargando ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} />}
+            {sugeridorCargando ? "Sugiriendo…" : "Sugerir con IA"}
+          </button>
+        </div>
+
+        {sugerencias.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400">Hacé clic para agregar al instante:</p>
+            <div className="flex flex-wrap gap-2">
+              {sugerencias.map((catName) => (
+                <button
+                  key={catName}
+                  type="button"
+                  onClick={() => crearCategoriaSugerida(catName)}
+                  disabled={cargando}
+                  className="flex items-center gap-1 text-xs bg-white border border-neutral-200 text-neutral-800 rounded-full px-3 py-1.5 font-medium hover:border-neutral-900 hover:text-neutral-900 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  <Plus size={11} /> {catName}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-neutral-400">¿No estás seguro de qué categorías crear? Dejá que la IA te recomiende las mejores para tu negocio.</p>
+        )}
       </div>
 
       <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden max-w-xl divide-y divide-neutral-100">
@@ -237,10 +311,29 @@ function ConfigNegocio({ onError }) {
   const [form, setForm] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [ok, setOk] = useState(false);
+  const [generandoDesc, setGenerandoDesc] = useState(false);
 
   useEffect(() => {
     apiGet("/negocios/mi-negocio").then(setForm).catch(onError);
   }, [onError]);
+
+  async function generarDescripcionConIA() {
+    if (!form.nombre?.trim()) {
+      alert("Por favor ingresá primero el nombre del negocio.");
+      return;
+    }
+    setGenerandoDesc(true);
+    try {
+      const res = await apiPost("/admin/ia/descripcion-negocio", { texto: form.nombre });
+      if (res.texto) {
+        setForm(prev => ({ ...prev, descripcion: res.texto }));
+      }
+    } catch (err) {
+      onError(err);
+    } finally {
+      setGenerandoDesc(false);
+    }
+  }
 
   function set(k) {
     return (e) => setForm({ ...form, [k]: e.target.value });
@@ -291,7 +384,18 @@ function ConfigNegocio({ onError }) {
               <input value={form.nombre} onChange={set("nombre")} required className="campo-admin" />
             </div>
             <div>
-              <Etiqueta icono={<BookOpen size={12} />} label="Descripción" />
+              <div className="flex items-center justify-between mb-1.5">
+                <Etiqueta icono={<BookOpen size={12} />} label="Descripción" sinMargen />
+                <button
+                  type="button"
+                  onClick={generarDescripcionConIA}
+                  disabled={!form.nombre?.trim() || generandoDesc}
+                  className="flex items-center gap-1 text-xs bg-neutral-100 border border-neutral-200 text-neutral-900 rounded-full px-3 py-1 font-medium hover:bg-neutral-200 active:scale-95 transition-all shadow-sm disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  {generandoDesc ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} className="text-neutral-500" />}
+                  {generandoDesc ? "Generando…" : "Generar con IA"}
+                </button>
+              </div>
               <textarea value={form.descripcion || ""} onChange={set("descripcion")} rows={2} className="campo-admin resize-none" placeholder="Breve descripción que verá el cliente" />
             </div>
           </div>
@@ -626,9 +730,9 @@ function Servicios({ negocioId, onError }) {
                 type="button"
                 onClick={generarDescripcion}
                 disabled={!nuevo.nombre.trim() || generandoDesc}
-                className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 disabled:opacity-40"
+                className="flex items-center gap-1 text-xs bg-neutral-100 border border-neutral-200 text-neutral-900 rounded-full px-3 py-1 font-medium hover:bg-neutral-200 active:scale-95 transition-all shadow-sm disabled:opacity-40 disabled:pointer-events-none"
               >
-                {generandoDesc ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {generandoDesc ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} className="text-neutral-500" />}
                 {generandoDesc ? "Generando…" : "Generar con IA"}
               </button>
             </div>
@@ -692,6 +796,21 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
   });
   const [guardando, setGuardando] = useState(false);
 
+  async function eliminar() {
+    if (!confirm(`¿Seguro que querés eliminar el servicio "${s.nombre}"? Esta acción no se puede deshacer.`)) return;
+    setGuardando(true);
+    try {
+      await apiDelete(`/servicios/${s.id}`);
+      onActualizar();
+    } catch (err) {
+      onError(err);
+      alert(err.message);
+      onActualizar();
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   async function guardar() {
     setGuardando(true);
     try {
@@ -735,13 +854,30 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t border-neutral-100 sm:border-0 flex-shrink-0">
-          <button onClick={() => setEditando((v) => !v)}
+          <button onClick={() => {
+            if (!editando) {
+              setForm({
+                nombre: s.nombre,
+                descripcion: s.descripcion || "",
+                duracion_min: s.duracion_min,
+                precio: s.precio,
+                imagen: s.imagen || "",
+                buffer_min: s.buffer_min,
+                categoria_id: s.categoria_id || "",
+              });
+            }
+            setEditando((v) => !v);
+          }}
             className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-50 border border-transparent hover:border-neutral-200">
             <Pencil size={12} /> Editar
           </button>
           <button onClick={onToggle}
             className={`text-xs px-3 py-1.5 rounded-lg hover:bg-neutral-50 border border-transparent ${s.activo ? "text-neutral-500 hover:text-neutral-900 hover:border-neutral-200" : "text-green-600 hover:border-green-200"}`}>
             {s.activo ? "Desactivar" : "Activar"}
+          </button>
+          <button onClick={eliminar} disabled={guardando}
+            className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-200 disabled:opacity-50">
+            <Trash2 size={12} /> Eliminar
           </button>
         </div>
       </div>

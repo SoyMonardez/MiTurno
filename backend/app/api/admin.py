@@ -28,6 +28,7 @@ from app.schemas.admin import (
     SugerenciaOut,
     SugerenciaTextoOut,
     TextoIn,
+    SugerenciaCategoriasOut,
 )
 from app.schemas.reserva import ReservaOut
 from app.schemas.negocio import NegocioUpdate, NegocioOut
@@ -485,3 +486,58 @@ def actualizar_negocio(
     db.commit()
     db.refresh(negocio)
     return negocio
+
+
+@router.post("/ia/descripcion-negocio", response_model=SugerenciaTextoOut)
+def descripcion_negocio(
+    data: TextoIn,
+    admin: Usuario = Depends(get_current_admin),
+) -> SugerenciaTextoOut:
+    nombre = (data.texto or "").strip()
+    if not nombre:
+        return SugerenciaTextoOut(texto="")
+    prompt = (
+        f"Escribí una descripción corta, elegante y comercial (máximo 25 palabras, en español rioplatense, "
+        f"sin comillas) para la presentación de un negocio de servicios llamado '{nombre}'. "
+        "Respondé SOLO con la descripción, sin texto adicional."
+    )
+    texto = _ia_texto(prompt, max_tokens=100)
+    if not texto:
+        texto = f"Bienvenidos a {nombre}, brindamos servicios de excelencia con la mejor atención y profesionales capacitados."
+    texto = texto.strip().strip('"').strip()
+    return SugerenciaTextoOut(texto=texto)
+
+
+@router.post("/ia/sugerir-categorias", response_model=SugerenciaCategoriasOut)
+def sugerir_categorias(
+    data: TextoIn,
+    admin: Usuario = Depends(get_current_admin),
+) -> SugerenciaCategoriasOut:
+    nombre = (data.texto or "").strip()
+    if not nombre:
+        return SugerenciaCategoriasOut(categorias=[])
+    
+    prompt = (
+        f"Para un negocio de servicios llamado o descripto como '{nombre}', "
+        f"sugerí entre 3 y 6 categorías de servicios adecuadas. "
+        f"Ejemplos si es barbería: 'Cortes', 'Barba', 'Combos'. "
+        f"Respondé únicamente con una lista de nombres de categorías separados por comas y nada más (ejemplo: Cortes, Barba, Combos)."
+    )
+    texto = _ia_texto(prompt, max_tokens=100)
+    if not texto:
+        nombre_lower = nombre.lower()
+        if "barber" in nombre_lower or "peluquería" in nombre_lower or "corte" in nombre_lower:
+            return SugerenciaCategoriasOut(categorias=["Cortes", "Barba", "Coloración", "Combos"])
+        elif "spa" in nombre_lower or "estética" in nombre_lower or "facial" in nombre_lower:
+            return SugerenciaCategoriasOut(categorias=["Masajes", "Faciales", "Corporales", "Combos"])
+        else:
+            return SugerenciaCategoriasOut(categorias=["Servicios", "Combos", "Especiales"])
+    
+    categorias = [c.strip().strip('"').strip() for c in texto.split(",") if c.strip()]
+    vistas = set()
+    categorias_limpias = []
+    for c in categorias:
+        if c.lower() not in vistas and c:
+            vistas.add(c.lower())
+            categorias_limpias.append(c)
+    return SugerenciaCategoriasOut(categorias=categorias_limpias[:6])
