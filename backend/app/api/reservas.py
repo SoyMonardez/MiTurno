@@ -27,6 +27,7 @@ def crear(data: ReservaCreate, db: Session = Depends(get_db)) -> ReservaOut:
 
 @router.get("/cancelar/{token}", response_model=ReservaPublicaOut)
 def datos_para_cancelar(token: str, db: Session = Depends(get_db)) -> ReservaPublicaOut:
+    db.info["current_cancelacion_token"] = token
     reserva = db.scalar(select(Reserva).where(Reserva.token_cancelacion == token))
     if not reserva:
         raise HTTPException(404, "Reserva no encontrada")
@@ -63,4 +64,5 @@ def datos_para_cancelar(token: str, db: Session = Depends(get_db)) -> ReservaPub
 
 @router.post("/cancelar/{token}", response_model=ReservaOut)
 def cancelar_cliente(token: str, db: Session = Depends(get_db)) -> ReservaOut:
+    db.info["current_cancelacion_token"] = token
     return cancelar_por_token(token, db)

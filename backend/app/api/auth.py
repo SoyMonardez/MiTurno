@@ -32,6 +32,8 @@ class TokenOut(BaseModel):
 
 @router.post("/login", response_model=TokenOut)
 def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenOut:
+    # Evitamos RLS en login para poder buscar el usuario por username
+    db.info["bypass_rls"] = True
     # Limpiamos espacios y caracteres invisibles para que el login no sea sensible a ellos.
     username = data.username.strip()
     dni = data.dni.strip()
@@ -67,14 +69,23 @@ def get_current_admin(
     try:
         payload = decodificar_token(cred.credentials)
         usuario_id = int(payload["sub"])
+        negocio_id = payload.get("negocio_id")
     except Exception:
         raise HTTPException(401, "Token inválido o expirado")
+
+    # Establecemos contexto para RLS antes de consultar el usuario
+    db.info["current_user_id"] = usuario_id
+    db.info["current_negocio_id"] = negocio_id
+    db.info["bypass_rls"] = False
 
     usuario = db.get(Usuario, usuario_id)
     if not usuario or not usuario.activo:
         raise HTTPException(401, "Usuario no válido")
     if usuario.rol not in (RolUsuario.admin, RolUsuario.super_admin):
         raise HTTPException(403, "Se requiere rol de administrador")
+
+    # Establecemos el rol una vez verificado
+    db.info["current_user_rol"] = usuario.rol.value
     return usuario
 
 
@@ -85,12 +96,21 @@ def get_current_super_admin(
     try:
         payload = decodificar_token(cred.credentials)
         usuario_id = int(payload["sub"])
+        negocio_id = payload.get("negocio_id")
     except Exception:
         raise HTTPException(401, "Token inválido o expirado")
+
+    # Establecemos contexto para RLS antes de consultar el usuario
+    db.info["current_user_id"] = usuario_id
+    db.info["current_negocio_id"] = negocio_id
+    db.info["bypass_rls"] = False
 
     usuario = db.get(Usuario, usuario_id)
     if not usuario or not usuario.activo:
         raise HTTPException(401, "Usuario no válido")
     if usuario.rol != RolUsuario.super_admin:
         raise HTTPException(403, "Se requiere rol de super-admin")
+
+    # Establecemos el rol una vez verificado
+    db.info["current_user_rol"] = usuario.rol.value
     return usuario
