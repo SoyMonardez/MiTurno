@@ -1021,16 +1021,21 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
 
 // ─── Profesionales ────────────────────────────────────────────────────────────
 
+const LIMITE_PROF = { basico: 1, pro: 5, premium: Infinity };
+const PLAN_LABEL  = { basico: "Básico", pro: "Pro", premium: "Premium" };
+
 function Profesionales({ negocioId, onError }) {
   const dialog = useDialog();
   const [profesionales, setProfesionales] = useState(null);
   const [servicios, setServicios] = useState([]);
+  const [plan, setPlan] = useState("pro");
   const [nuevo, setNuevo] = useState({ nombre: "", bio: "", foto: "", servicio_ids: [] });
   const [mostrarForm, setMostrarForm] = useState(false);
 
   const cargar = useCallback(() => {
     apiGet(`/negocios/${negocioId}/profesionales`).then(setProfesionales).catch(onError);
     apiGet(`/negocios/${negocioId}/servicios`).then(setServicios).catch(onError);
+    apiGet("/admin/negocio").then((n) => setPlan(n.plan || "pro")).catch(() => {});
   }, [negocioId, onError]);
   useEffect(() => cargar(), [cargar]);
 
@@ -1056,13 +1061,27 @@ function Profesionales({ negocioId, onError }) {
   }
 
   if (!profesionales) return <Cargando />;
+
+  const limite = LIMITE_PROF[plan] ?? Infinity;
+  const alcanzado = profesionales.length >= limite;
+
   return (
     <div className="space-y-4">
       {!mostrarForm && (
-        <button onClick={() => setMostrarForm(true)}
-          className="flex items-center gap-2 rounded-full bg-neutral-900 text-white px-5 py-2.5 text-xs uppercase tracking-[0.1em] font-medium hover:bg-neutral-800 transition-colors">
-          <Plus size={15} /> Agregar profesional
-        </button>
+        alcanzado ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <span className="font-medium">Límite del plan {PLAN_LABEL[plan]}:</span> ya tenés {limite} profesional{limite !== 1 ? "es" : ""} cargado{limite !== 1 ? "s" : ""}.
+            {" "}Para agregar más, pedile al administrador que actualice el plan.
+          </div>
+        ) : (
+          <button onClick={() => setMostrarForm(true)}
+            className="flex items-center gap-2 rounded-full bg-neutral-900 text-white px-5 py-2.5 text-xs uppercase tracking-[0.1em] font-medium hover:bg-neutral-800 transition-colors">
+            <Plus size={15} /> Agregar profesional
+            {limite < Infinity && (
+              <span className="ml-1 text-white/60">({profesionales.length}/{limite})</span>
+            )}
+          </button>
+        )
       )}
 
       {mostrarForm && (

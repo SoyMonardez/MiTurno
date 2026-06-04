@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_admin
@@ -7,6 +7,10 @@ from app.api.deps import get_db
 from app.models.catalogo import Servicio
 from app.models.enums import RolUsuario
 from app.models.negocio import Negocio, Usuario
+from app.schemas.superadmin import PLAN_PRECIOS
+
+# Límite de profesionales por plan
+_LIMITE_PROFESIONALES = {"basico": 1, "pro": 5, "premium": None}  # None = ilimitado
 from app.models.profesional import ExcepcionAgenda, HorarioRecurrente, Profesional
 from app.schemas.profesional import (
     ExcepcionCreate,
@@ -75,8 +79,25 @@ def crear_profesional(
     db: Session = Depends(get_db),
 ) -> ProfesionalOut:
     _autorizar_negocio(negocio_id, admin)
-    if not db.get(Negocio, negocio_id):
+    negocio = db.get(Negocio, negocio_id)
+    if not negocio:
         raise HTTPException(404, "Negocio no encontrado")
+
+    # Verificar límite de profesionales según el plan
+    plan = negocio.plan or "pro"
+    limite = _LIMITE_PROFESIONALES.get(plan)
+    if limite is not None:
+        actuales = db.scalar(
+            select(func.count(Profesional.id)).where(Profesional.negocio_id == negocio_id)
+        ) or 0
+        if actuales >= limite:
+            plan_label = {"basico": "Básico", "pro": "Pro", "premium": "Premium"}.get(plan, plan)
+            raise HTTPException(
+                403,
+                f"El plan {plan_label} permite hasta {limite} profesional{'es' if limite != 1 else ''}. "
+                f"Actualizá el plan para agregar más."
+            )
+
     profesional = Profesional(
         negocio_id=negocio_id, nombre=data.nombre, foto=data.foto, bio=data.bio
     )
