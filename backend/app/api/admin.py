@@ -31,9 +31,10 @@ from app.schemas.admin import (
     TextoIn,
     SugerenciaCategoriasOut,
 )
-from app.schemas.reserva import ReservaOut
+from app.schemas.reserva import ReservaAdminCreate, ReservaOut
 from app.schemas.negocio import NegocioUpdate, NegocioOut
 from app.services.gestion_reservas import cancelar_por_admin, marcar_asistencia
+from app.services.reservas import crear_reserva_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -469,6 +470,15 @@ def listar_reservas(
         .order_by(Reserva.inicio)
     )
     return _serializar_reservas(reservas, db)
+
+
+@router.post("/reservas", response_model=ReservaOut, status_code=201)
+def crear_reserva_manual(
+    data: ReservaAdminCreate,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> ReservaOut:
+    return crear_reserva_admin(admin.negocio_id, data, db)
 
 
 @router.post("/reservas/{reserva_id}/cancelar", response_model=ReservaOut)

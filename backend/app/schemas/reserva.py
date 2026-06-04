@@ -22,6 +22,21 @@ class ReservaCreate(BaseModel):
     notas: str | None = None
 
 
+class ClienteAdminDatos(BaseModel):
+    """Datos del cliente para una reserva cargada por el admin (email opcional)."""
+    nombre: str
+    telefono: str | None = None
+    email: EmailStr | None = None
+
+
+class ReservaAdminCreate(BaseModel):
+    servicio_ids: list[int]
+    profesional_id: int | None = None  # None = "cualquier profesional"
+    inicio: datetime  # UTC
+    cliente: ClienteAdminDatos
+    notas: str | None = None
+
+
 class ReservaItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     servicio_id: int

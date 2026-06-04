@@ -5,6 +5,7 @@ import {
   Clock,
   LayoutGrid,
   LogOut,
+  Plus,
   Search,
   SlidersHorizontal,
   Star,
@@ -17,7 +18,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPost, clearToken, getNegocioId } from "../api/client.js";
 import { useDialog } from "../components/Dialog.jsx";
-import { fechaHora, formatoPrecio, isoFecha } from "../lib/format.js";
+import { fechaHora, formatoPrecio, horaLocal, isoFecha } from "../lib/format.js";
 import { ICONO_DEFAULT, IconoNegocio } from "../lib/iconos.jsx";
 import AdminGestion from "./AdminGestion.jsx";
 import SEO from "../components/SEO.jsx";
@@ -304,6 +305,7 @@ function Turnos({ onError }) {
   const [hasta, setHasta] = useState(enUnaSemana);
   const [turnos, setTurnos] = useState(null);
   const [filtroEstado, setFiltroEstado] = useState("");
+  const [nuevoAbierto, setNuevoAbierto] = useState(false);
 
   const cargar = useCallback(() => {
     setTurnos(null);
@@ -356,7 +358,21 @@ function Turnos({ onError }) {
             </button>
           ))}
         </div>
+        <button
+          onClick={() => setNuevoAbierto(true)}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2 hover:bg-neutral-800 transition-colors"
+        >
+          <Plus size={15} strokeWidth={2} /> Nuevo turno
+        </button>
       </div>
+
+      {nuevoAbierto && (
+        <ModalNuevoTurno
+          onClose={() => setNuevoAbierto(false)}
+          onCreado={() => { setNuevoAbierto(false); refrescar(); }}
+          onError={onError}
+        />
+      )}
 
       {/* Contadores por estado (filtro) */}
       {contadores && (
@@ -395,6 +411,227 @@ function Turnos({ onError }) {
       )}
     </div>
   );
+}
+
+function ModalNuevoTurno({ onClose, onCreado, onError }) {
+  const negocioId = getNegocioId();
+  const [servicios, setServicios] = useState([]);
+  const [profesionales, setProfesionales] = useState([]);
+  const [seleccion, setSeleccion] = useState([]);
+  const [profesionalId, setProfesionalId] = useState("");
+  const [fecha, setFecha] = useState(isoFecha(new Date()));
+  const [franjas, setFranjas] = useState(null);
+  const [cargandoSlots, setCargandoSlots] = useState(false);
+  const [slot, setSlot] = useState(null);
+  const [datos, setDatos] = useState({ nombre: "", telefono: "", email: "" });
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!negocioId) return;
+    apiGet(`/negocios/${negocioId}/servicios`)
+      .then((s) => setServicios(s.filter((x) => x.activo)))
+      .catch(onError);
+    apiGet(`/negocios/${negocioId}/profesionales`).then(setProfesionales).catch(() => {});
+  }, [negocioId, onError]);
+
+  useEffect(() => {
+    if (!negocioId || seleccion.length === 0) {
+      setFranjas(null);
+      setSlot(null);
+      return;
+    }
+    setCargandoSlots(true);
+    setSlot(null);
+    setFranjas(null);
+    const params = new URLSearchParams({ negocio_id: negocioId, fecha });
+    seleccion.forEach((id) => params.append("servicio_ids", id));
+    if (profesionalId) params.append("profesional_id", profesionalId);
+    apiGet(`/disponibilidad?${params.toString()}`)
+      .then(setFranjas)
+      .catch((e) => setError(e.message))
+      .finally(() => setCargandoSlots(false));
+  }, [negocioId, seleccion, fecha, profesionalId]);
+
+  function toggleServicio(id) {
+    setSeleccion((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  const slots = franjas
+    ? [...(franjas.manana || []), ...(franjas.tarde || []), ...(franjas.noche || [])]
+    : [];
+  const totalPrecio = servicios
+    .filter((s) => seleccion.includes(s.id))
+    .reduce((acc, s) => acc + Number(s.precio), 0);
+  const puedeCrear = seleccion.length > 0 && slot && datos.nombre.trim() && !enviando;
+
+  async function crear() {
+    if (!puedeCrear) return;
+    setEnviando(true);
+    setError(null);
+    try {
+      await apiPost("/admin/reservas", {
+        servicio_ids: seleccion,
+        profesional_id: slot.profesional_id,
+        inicio: slot.inicio,
+        cliente: {
+          nombre: datos.nombre.trim(),
+          telefono: datos.telefono.trim() || null,
+          email: datos.email.trim() || null,
+        },
+      });
+      onCreado();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
+      <div
+        className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-neutral-100 px-5 py-4 flex items-center justify-between">
+          <h3 className="font-serif text-lg text-neutral-900">Nuevo turno</h3>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900">
+            <X size={20} strokeWidth={1.5} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Servicios */}
+          <div>
+            <EtiquetaModal>Servicios</EtiquetaModal>
+            {servicios.length === 0 ? (
+              <p className="text-sm text-neutral-400">No hay servicios cargados.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {servicios.map((s) => {
+                  const activo = seleccion.includes(s.id);
+                  return (
+                    <button key={s.id} onClick={() => toggleServicio(s.id)}
+                      className={`text-xs rounded-full border px-3 py-1.5 transition-colors ${
+                        activo ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 text-neutral-600 hover:border-neutral-500"
+                      }`}>
+                      {s.nombre} · {formatoPrecio(s.precio)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Profesional (opcional) */}
+          <div>
+            <EtiquetaModal>Profesional (opcional)</EtiquetaModal>
+            <select
+              value={profesionalId}
+              onChange={(e) => setProfesionalId(e.target.value)}
+              className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900"
+            >
+              <option value="">Cualquier profesional disponible</option>
+              {profesionales.map((p) => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Fecha */}
+          <div>
+            <EtiquetaModal>Fecha</EtiquetaModal>
+            <input
+              type="date" value={fecha} min={isoFecha(new Date())}
+              onChange={(e) => setFecha(e.target.value)}
+              className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900"
+            />
+          </div>
+
+          {/* Horarios disponibles */}
+          {seleccion.length > 0 && (
+            <div>
+              <EtiquetaModal>Horario disponible</EtiquetaModal>
+              {cargandoSlots ? (
+                <p className="text-sm text-neutral-400">Buscando horarios…</p>
+              ) : slots.length === 0 ? (
+                <p className="text-sm text-neutral-400">No hay horarios libres ese día. Probá otra fecha o profesional.</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto">
+                  {slots.map((sl) => {
+                    const activo = slot && slot.inicio === sl.inicio && slot.profesional_id === sl.profesional_id;
+                    return (
+                      <button key={`${sl.inicio}-${sl.profesional_id}`} onClick={() => setSlot(sl)}
+                        className={`text-xs rounded-lg border py-2 transition-colors ${
+                          activo ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 text-neutral-700 hover:border-neutral-500"
+                        }`}>
+                        {horaLocal(sl.inicio)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Datos del cliente */}
+          <div className="space-y-3 pt-1 border-t border-neutral-100">
+            <div>
+              <EtiquetaModal>Nombre del cliente *</EtiquetaModal>
+              <input
+                value={datos.nombre} onChange={(e) => setDatos({ ...datos, nombre: e.target.value })}
+                placeholder="Nombre y apellido"
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <EtiquetaModal>Teléfono</EtiquetaModal>
+                <input
+                  type="tel" inputMode="numeric" autoComplete="tel"
+                  value={datos.telefono} onChange={(e) => setDatos({ ...datos, telefono: e.target.value })}
+                  placeholder="Opcional"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900"
+                />
+              </div>
+              <div>
+                <EtiquetaModal>Email</EtiquetaModal>
+                <input
+                  type="email" value={datos.email} onChange={(e) => setDatos({ ...datos, email: e.target.value })}
+                  placeholder="Opcional"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-900"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-neutral-400">Si cargás el email, el cliente recibe la confirmación y los recordatorios.</p>
+          </div>
+
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">{error}</div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-white border-t border-neutral-100 px-5 py-4 flex items-center justify-between gap-3">
+          <span className="text-sm text-neutral-500">
+            {seleccion.length > 0 && <>Total: <span className="font-medium text-neutral-900">{formatoPrecio(totalPrecio)}</span></>}
+          </span>
+          <button
+            onClick={crear} disabled={!puedeCrear}
+            className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 text-white text-sm px-5 py-2.5 disabled:opacity-40 hover:bg-neutral-800 transition-colors"
+          >
+            <Check size={16} strokeWidth={2} /> {enviando ? "Creando…" : "Crear turno"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EtiquetaModal({ children }) {
+  return <label className="block text-[10px] uppercase tracking-[0.15em] text-neutral-400 mb-1.5">{children}</label>;
 }
 
 function TarjetaTurno({ turno: t, conAcciones, onCompletar, onNoShow, onCancelar }) {
