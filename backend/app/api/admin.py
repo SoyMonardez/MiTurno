@@ -118,30 +118,56 @@ def _servicios_fallback(tipo: str) -> list[str]:
     return _SERVICIOS_POR_TIPO["default"]
 
 
-def _serializar_reserva(reserva: Reserva, db: Session) -> ReservaAdminOut:
-    cliente = db.get(Cliente, reserva.cliente_id)
-    profesional = db.get(Profesional, reserva.profesional_id)
-    nombres = list(
-        db.scalars(
-            select(Servicio.nombre)
-            .join(ReservaItem, ReservaItem.servicio_id == Servicio.id)
-            .where(ReservaItem.reserva_id == reserva.id)
-            .order_by(ReservaItem.orden)
+def _serializar_reservas(reservas, db: Session) -> list[ReservaAdminOut]:
+    """Serializa una lista de reservas con pocas queries (evita N+1)."""
+    reservas = list(reservas)
+    if not reservas:
+        return []
+
+    cliente_ids = {r.cliente_id for r in reservas if r.cliente_id}
+    profesional_ids = {r.profesional_id for r in reservas if r.profesional_id}
+    reserva_ids = [r.id for r in reservas]
+
+    clientes = (
+        {c.id: c for c in db.scalars(select(Cliente).where(Cliente.id.in_(cliente_ids)))}
+        if cliente_ids else {}
+    )
+    profesionales = (
+        {p.id: p for p in db.scalars(select(Profesional).where(Profesional.id.in_(profesional_ids)))}
+        if profesional_ids else {}
+    )
+
+    # Nombres de servicios de todas las reservas en una sola query.
+    servicios_por_reserva: dict[int, list[str]] = {rid: [] for rid in reserva_ids}
+    filas = db.execute(
+        select(ReservaItem.reserva_id, Servicio.nombre)
+        .join(Servicio, Servicio.id == ReservaItem.servicio_id)
+        .where(ReservaItem.reserva_id.in_(reserva_ids))
+        .order_by(ReservaItem.reserva_id, ReservaItem.orden)
+    ).all()
+    for rid, nombre in filas:
+        servicios_por_reserva.setdefault(rid, []).append(nombre)
+
+    salida = []
+    for r in reservas:
+        cliente = clientes.get(r.cliente_id)
+        profesional = profesionales.get(r.profesional_id)
+        salida.append(
+            ReservaAdminOut(
+                id=r.id,
+                inicio=r.inicio,
+                fin=r.fin,
+                estado=r.estado,
+                total_precio=r.total_precio,
+                total_duracion=r.total_duracion,
+                cliente_nombre=cliente.nombre if cliente else "—",
+                cliente_email=cliente.email if cliente else "",
+                cliente_telefono=cliente.telefono if cliente else None,
+                profesional_nombre=profesional.nombre if profesional else "—",
+                servicios=servicios_por_reserva.get(r.id, []),
+            )
         )
-    )
-    return ReservaAdminOut(
-        id=reserva.id,
-        inicio=reserva.inicio,
-        fin=reserva.fin,
-        estado=reserva.estado,
-        total_precio=reserva.total_precio,
-        total_duracion=reserva.total_duracion,
-        cliente_nombre=cliente.nombre,
-        cliente_email=cliente.email,
-        cliente_telefono=cliente.telefono,
-        profesional_nombre=profesional.nombre,
-        servicios=nombres,
-    )
+    return salida
 
 
 @router.get("/dashboard", response_model=DashboardOut)
@@ -217,8 +243,8 @@ def dashboard(
     return DashboardOut(
         turnos_hoy=_contar(inicio_hoy, fin_hoy),
         turnos_semana=_contar(inicio_hoy, fin_semana),
-        hoy=[_serializar_reserva(r, db) for r in turnos_hoy_lista],
-        proximos=[_serializar_reserva(r, db) for r in proximas],
+        hoy=_serializar_reservas(turnos_hoy_lista, db),
+        proximos=_serializar_reservas(proximas, db),
         accesos_recientes=[
             AccesoOut(usuario_nombre=n, usuario_dni=d, ingreso_en=i) for n, d, i in accesos
         ],
@@ -232,25 +258,30 @@ def estadisticas(
     db: Session = Depends(get_db),
 ) -> EstadisticasOut:
     negocio = db.get(Negocio, admin.negocio_id)
-    tz = ZoneInfo(negocio.zona_horaria)
+    tz_name = negocio.zona_horaria
+    tz = ZoneInfo(tz_name)
     hoy = datetime.now(tz).date()
+    primer_dia = hoy - timedelta(days=dias - 1)
+    desde_utc = datetime.combine(primer_dia, time.min, tzinfo=tz).astimezone(ZoneInfo("UTC"))
+
+    # Una sola query: cuenta los turnos por día, convertidos a la zona
+    # horaria del negocio (antes eran ~30 queries en un loop).
+    dia_local = func.date(func.timezone(tz_name, Reserva.inicio))
+    filas = db.execute(
+        select(dia_local.label("dia"), func.count(Reserva.id))
+        .where(
+            Reserva.negocio_id == negocio.id,
+            Reserva.estado.in_([EstadoReserva.confirmada, EstadoReserva.completada]),
+            Reserva.inicio >= desde_utc,
+        )
+        .group_by(dia_local)
+    ).all()
+    conteo = {fila[0]: fila[1] for fila in filas}
 
     resultado = []
     for i in range(dias - 1, -1, -1):
         dia = hoy - timedelta(days=i)
-        inicio_utc = datetime.combine(dia, time.min, tzinfo=tz).astimezone(ZoneInfo("UTC"))
-        fin_utc = datetime.combine(dia + timedelta(days=1), time.min, tzinfo=tz).astimezone(
-            ZoneInfo("UTC")
-        )
-        count = db.scalar(
-            select(func.count(Reserva.id)).where(
-                Reserva.negocio_id == negocio.id,
-                Reserva.estado.in_([EstadoReserva.confirmada, EstadoReserva.completada]),
-                Reserva.inicio >= inicio_utc,
-                Reserva.inicio < fin_utc,
-            )
-        )
-        resultado.append(EstadisticaDiaOut(fecha=dia, turnos=count or 0))
+        resultado.append(EstadisticaDiaOut(fecha=dia, turnos=conteo.get(dia, 0)))
 
     return EstadisticasOut(datos=resultado)
 
@@ -437,7 +468,7 @@ def listar_reservas(
         )
         .order_by(Reserva.inicio)
     )
-    return [_serializar_reserva(r, db) for r in reservas]
+    return _serializar_reservas(reservas, db)
 
 
 @router.post("/reservas/{reserva_id}/cancelar", response_model=ReservaOut)
