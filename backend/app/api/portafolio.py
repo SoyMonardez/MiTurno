@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_admin
 from app.api.deps import get_db
-from app.models.negocio import Usuario
+from app.core.planes import requiere_plan
+from app.models.negocio import Negocio, Usuario
 from app.models.portafolio import PortafolioImagen
 from app.schemas.resena import PortafolioCreate, PortafolioOut
 
@@ -28,6 +29,8 @@ def agregar_imagen(
     admin: Usuario = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> PortafolioImagen:
+    negocio = db.get(Negocio, admin.negocio_id)
+    requiere_plan(negocio.plan if negocio else None, "pro", "El portafolio de fotos")
     imagen = PortafolioImagen(negocio_id=admin.negocio_id, **data.model_dump())
     db.add(imagen)
     db.commit()

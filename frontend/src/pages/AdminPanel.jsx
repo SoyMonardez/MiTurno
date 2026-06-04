@@ -311,6 +311,12 @@ function Turnos({ onError }) {
   const [turnos, setTurnos] = useState(null);
   const [filtroEstado, setFiltroEstado] = useState("");
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
+  const [plan, setPlan] = useState("pro");
+
+  useEffect(() => {
+    apiGet("/admin/negocio").then((n) => setPlan(n.plan || "pro")).catch(() => {});
+  }, []);
+  const cargaManualHabilitada = plan !== "basico";
 
   const cargar = useCallback(() => {
     setTurnos(null);
@@ -363,12 +369,21 @@ function Turnos({ onError }) {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setNuevoAbierto(true)}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2 hover:bg-neutral-800 transition-colors"
-        >
-          <Plus size={15} strokeWidth={2} /> Nuevo turno
-        </button>
+        {cargaManualHabilitada ? (
+          <button
+            onClick={() => setNuevoAbierto(true)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2 hover:bg-neutral-800 transition-colors"
+          >
+            <Plus size={15} strokeWidth={2} /> Nuevo turno
+          </button>
+        ) : (
+          <span
+            title="Disponible desde el plan Pro"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-neutral-200 text-neutral-400 text-xs uppercase tracking-[0.1em] px-4 py-2 cursor-not-allowed"
+          >
+            <Plus size={15} strokeWidth={2} /> Nuevo turno · Pro
+          </span>
+        )}
       </div>
 
       {nuevoAbierto && (
@@ -971,9 +986,29 @@ function Reportes({ onError }) {
             </div>
             {/* Tasas */}
             {data.turnos_total > 0 && (
-              <div className="mt-3 flex gap-4 text-sm text-neutral-500 px-1">
-                <span>Tasa no-show: <span className={`font-medium ${data.tasa_no_show > 20 ? "text-red-500" : "text-neutral-700"}`}>{data.tasa_no_show}%</span></span>
-                <span>Tasa cancelación: <span className={`font-medium ${data.tasa_cancelacion > 30 ? "text-red-500" : "text-neutral-700"}`}>{data.tasa_cancelacion}%</span></span>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
+                  <div className={`text-lg font-semibold ${data.tasa_no_show > 20 ? "text-red-500" : "text-neutral-800"}`}>
+                    {data.tasa_no_show}%
+                  </div>
+                  <div className="text-xs text-neutral-500 leading-tight mt-0.5">
+                    Clientes que <span className="font-medium">no vinieron</span> sin avisar
+                  </div>
+                  {data.tasa_no_show > 20 && (
+                    <div className="text-[11px] text-red-400 mt-1">⚠ Alto — considerá pedir seña</div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
+                  <div className={`text-lg font-semibold ${data.tasa_cancelacion > 30 ? "text-red-500" : "text-neutral-800"}`}>
+                    {data.tasa_cancelacion}%
+                  </div>
+                  <div className="text-xs text-neutral-500 leading-tight mt-0.5">
+                    Turnos <span className="font-medium">cancelados</span> del total
+                  </div>
+                  {data.tasa_cancelacion > 30 && (
+                    <div className="text-[11px] text-red-400 mt-1">⚠ Alto — revisá tu política de cancelación</div>
+                  )}
+                </div>
               </div>
             )}
           </div>

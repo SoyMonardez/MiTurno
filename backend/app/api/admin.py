@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_admin
 from app.api.deps import get_db
 from app.core.config import settings
+from app.core.planes import requiere_plan
 from app.models.catalogo import Servicio
 from app.models.cliente import Cliente
 from app.models.enums import EstadoReserva, RolUsuario, SegmentoCliente
@@ -40,6 +41,16 @@ from app.services.gestion_reservas import cancelar_por_admin, marcar_asistencia
 from app.services.reservas import crear_reserva_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _gate_ia(
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    """Dependencia: las features de IA requieren plan Pro o superior."""
+    negocio = db.get(Negocio, admin.negocio_id)
+    requiere_plan(negocio.plan if negocio else None, "pro", "Las sugerencias con IA")
+    return admin
 
 # Servicios comunes de barbería/salón (fallback sin API key)
 _SERVICIOS_POR_TIPO: dict[str, list[str]] = {
@@ -528,7 +539,7 @@ def _llamar_ia(mensaje: str) -> SugerenciaOut:
 @router.post("/ia/sugerencias-servicio", response_model=SugerenciaOut)
 def sugerencias_servicio(
     data: SugerenciaIn,
-    admin: Usuario = Depends(get_current_admin),
+    admin: Usuario = Depends(_gate_ia),
 ) -> SugerenciaOut:
     if not settings.groq_api_key and not settings.anthropic_api_key:
         return _fallback_servicios_estructurados(data.tipo_negocio or data.mensaje)
@@ -568,7 +579,7 @@ def _ia_texto(prompt: str, max_tokens: int = 200) -> str | None:
 @router.post("/ia/descripcion-servicio", response_model=SugerenciaTextoOut)
 def descripcion_servicio(
     data: TextoIn,
-    admin: Usuario = Depends(get_current_admin),
+    admin: Usuario = Depends(_gate_ia),
 ) -> SugerenciaTextoOut:
     nombre = (data.texto or "").strip()
     if not nombre:
@@ -618,6 +629,8 @@ def crear_reserva_manual(
     admin: Usuario = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> ReservaOut:
+    negocio = db.get(Negocio, admin.negocio_id)
+    requiere_plan(negocio.plan if negocio else None, "pro", "La carga manual de turnos")
     return crear_reserva_admin(admin.negocio_id, data, db)
 
 
@@ -723,7 +736,7 @@ def actualizar_negocio(
 @router.post("/ia/descripcion-negocio", response_model=SugerenciaTextoOut)
 def descripcion_negocio(
     data: TextoIn,
-    admin: Usuario = Depends(get_current_admin),
+    admin: Usuario = Depends(_gate_ia),
 ) -> SugerenciaTextoOut:
     nombre = (data.texto or "").strip()
     if not nombre:
@@ -743,7 +756,7 @@ def descripcion_negocio(
 @router.post("/ia/sugerir-categorias", response_model=SugerenciaCategoriasOut)
 def sugerir_categorias(
     data: TextoIn,
-    admin: Usuario = Depends(get_current_admin),
+    admin: Usuario = Depends(_gate_ia),
 ) -> SugerenciaCategoriasOut:
     nombre = (data.texto or "").strip()
     if not nombre:

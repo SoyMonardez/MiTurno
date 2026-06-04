@@ -1391,10 +1391,12 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
 function Portafolio({ onError }) {
   const dialog = useDialog();
   const [imagenes, setImagenes] = useState(null);
+  const [plan, setPlan] = useState("pro");
   const negocioId = getNegocioId();
 
   const cargar = useCallback(() => {
     apiGet(`/negocios/${negocioId}/portafolio`).then(setImagenes).catch(onError);
+    apiGet("/admin/negocio").then((n) => setPlan(n.plan || "pro")).catch(() => {});
   }, [negocioId, onError]);
   useEffect(() => cargar(), [cargar]);
 
@@ -1420,6 +1422,20 @@ function Portafolio({ onError }) {
   }
 
   if (!imagenes) return <Cargando />;
+
+  if (plan === "basico") {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center">
+        <ImageIcon size={32} className="mx-auto mb-3 text-amber-400" strokeWidth={1.5} />
+        <h3 className="font-serif text-lg text-neutral-900 mb-1">Portafolio de fotos</h3>
+        <p className="text-sm text-amber-700">
+          Disponible desde el plan <span className="font-medium">Pro</span>. Mostrá tus trabajos
+          en la página pública para atraer más clientes.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-neutral-200 bg-white p-6">
