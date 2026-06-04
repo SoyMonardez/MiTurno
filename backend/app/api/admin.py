@@ -2,7 +2,7 @@ from datetime import date as date_type
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -11,9 +11,10 @@ from app.api.deps import get_db
 from app.core.config import settings
 from app.models.catalogo import Servicio
 from app.models.cliente import Cliente
-from app.models.enums import EstadoReserva, SegmentoCliente
+from app.models.enums import EstadoReserva, RolUsuario, SegmentoCliente
 from app.models.negocio import Negocio, RegistroAcceso, Usuario
 from app.models.profesional import Profesional
+from app.models.resena import Resena
 from app.models.reserva import Reserva, ReservaItem
 from app.schemas.admin import (
     AccesoOut,
@@ -181,10 +182,17 @@ def dashboard(
         .limit(10)
     )
 
+    # Solo accesos de usuarios que pertenecen a esta sucursal. Excluimos al
+    # super-admin y a admins de otros negocios (que en su momento pudieron
+    # quedar registrados con este negocio_id).
     accesos = db.execute(
         select(Usuario.nombre, Usuario.dni, RegistroAcceso.ingreso_en)
         .join(Usuario, Usuario.id == RegistroAcceso.usuario_id)
-        .where(RegistroAcceso.negocio_id == negocio.id)
+        .where(
+            RegistroAcceso.negocio_id == negocio.id,
+            Usuario.negocio_id == negocio.id,
+            Usuario.rol != RolUsuario.super_admin,
+        )
         .order_by(RegistroAcceso.ingreso_en.desc())
         .limit(10)
     ).all()
@@ -431,6 +439,27 @@ def asistencia(
     db: Session = Depends(get_db),
 ) -> ReservaOut:
     return marcar_asistencia(reserva_id, admin.negocio_id, data.estado, db)
+
+
+@router.delete("/resenas/{resena_id}", status_code=204)
+def eliminar_resena(
+    resena_id: int,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    from app.services.resenas import _recalcular_promedio_profesional
+
+    resena = db.get(Resena, resena_id)
+    if not resena or resena.negocio_id != admin.negocio_id:
+        raise HTTPException(404, "Reseña no encontrada")
+
+    profesional_id = resena.profesional_id
+    db.delete(resena)
+    db.flush()
+    # Recalcular el promedio del profesional tras eliminar la reseña.
+    if profesional_id:
+        _recalcular_promedio_profesional(profesional_id, db)
+    db.commit()
 
 
 @router.get("/clientes", response_model=list[ClienteAdminOut])

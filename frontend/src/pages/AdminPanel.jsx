@@ -9,13 +9,14 @@ import {
   Search,
   SlidersHorizontal,
   Star,
+  Trash2,
   User,
   Users,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet, apiPost, clearToken, getNegocioId } from "../api/client.js";
+import { apiDelete, apiGet, apiPost, clearToken, getNegocioId } from "../api/client.js";
 import { useDialog } from "../components/Dialog.jsx";
 import { fechaHora, formatoPrecio, isoFecha } from "../lib/format.js";
 import AdminGestion from "./AdminGestion.jsx";
@@ -607,15 +608,41 @@ function TarjetaCliente({ cliente: c }) {
 
 function Resenas({ onError }) {
   const [resenas, setResenas] = useState(null);
+  const [eliminando, setEliminando] = useState(null);
   const negocioId = getNegocioId();
+  const dialog = useDialog();
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     if (negocioId) {
       apiGet(`/negocios/${negocioId}/resenas`).then(setResenas).catch(onError);
     } else {
       setResenas([]);
     }
   }, [negocioId, onError]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  async function eliminar(r) {
+    const ok = await dialog.confirm(
+      `¿Eliminar la reseña de ${r.cliente_nombre}? Esta acción no se puede deshacer.`,
+      "Eliminar reseña",
+      { btnConfirm: "Eliminar" }
+    );
+    if (!ok) return;
+    setEliminando(r.id);
+    try {
+      await apiDelete(`/admin/resenas/${r.id}`);
+      setResenas((prev) => prev.filter((x) => x.id !== r.id));
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setEliminando(null);
+    }
+  }
+
   if (!resenas) return <Cargando />;
   if (resenas.length === 0) return <p className="text-neutral-400 text-sm">Todavía no hay reseñas.</p>;
   return (
@@ -629,11 +656,21 @@ function Resenas({ onError }) {
               </div>
               <span className="font-medium text-neutral-900">{r.cliente_nombre}</span>
             </div>
-            <div className="flex">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Star key={n} size={14} strokeWidth={1.5}
-                  className={n <= r.puntuacion ? "fill-amber-400 text-amber-400" : "text-neutral-300"} />
-              ))}
+            <div className="flex items-center gap-3">
+              <div className="flex">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star key={n} size={14} strokeWidth={1.5}
+                    className={n <= r.puntuacion ? "fill-amber-400 text-amber-400" : "text-neutral-300"} />
+                ))}
+              </div>
+              <button
+                onClick={() => eliminar(r)}
+                disabled={eliminando === r.id}
+                title="Eliminar reseña"
+                className="text-neutral-300 hover:text-red-500 transition-colors disabled:opacity-40"
+              >
+                <Trash2 size={16} strokeWidth={1.5} />
+              </button>
             </div>
           </div>
           {r.profesional_nombre && (

@@ -141,9 +141,17 @@ FUENTE_SANS = "Arial, Helvetica, sans-serif"
 def layout_html(negocio: Negocio, contenido_html: str) -> str:
     """Envuelve el contenido en un email HTML con estética editorial."""
     if negocio.logo:
+        # Enmarcamos el logo en una tarjeta blanca redondeada para que se vea
+        # intencional sobre el fondo negro (y no "pegado").
         marca = (
+            f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+            f'style="margin:0 auto;">'
+            f'<tr><td style="background:#ffffff;border-radius:18px;padding:18px 22px;'
+            f'box-shadow:0 8px 24px rgba(0,0,0,0.25);">'
             f'<img src="{negocio.logo}" alt="{negocio.nombre}" '
-            f'style="max-height:44px;margin:0 auto;display:block;" />'
+            f'style="max-height:96px;max-width:240px;display:block;margin:0 auto;'
+            f'border-radius:10px;" />'
+            f'</td></tr></table>'
         )
     else:
         marca = (

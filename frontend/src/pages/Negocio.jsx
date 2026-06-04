@@ -26,6 +26,7 @@ import { apiGet, apiPost } from "../api/client.js";
 import { emailValido, formatoPrecio, horaLocal, isoFecha } from "../lib/format.js";
 import { IconoNegocio } from "../lib/iconos.jsx";
 import SEO from "../components/SEO.jsx";
+import aleLogo from "../assets/ale-logo.svg";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -391,6 +392,8 @@ export default function Negocio() {
               <TabResenas resenas={resenas} setResenas={setResenas} negocio={negocio} />
             )}
           </div>
+
+          <FooterCreditos />
         </div>
 
         {seleccion.length > 0 && (
@@ -436,6 +439,34 @@ export default function Negocio() {
         />
       )}
     </div>
+  );
+}
+
+// ─── Footer de créditos (marca del creador) ───────────────────────────────────
+
+function FooterCreditos() {
+  return (
+    <footer className="border-t border-neutral-200 px-6 py-8 text-center">
+      <a
+        href="https://alejomonardez.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex flex-col items-center gap-2 group"
+      >
+        <img
+          src={aleLogo}
+          alt="ale"
+          className="w-11 h-11 rounded-2xl shadow-sm transition-transform group-hover:scale-105"
+        />
+        <span className="text-[11px] text-neutral-500 leading-relaxed">
+          Sistema de turnos creado por{" "}
+          <span className="font-medium text-neutral-800 group-hover:underline">Ale</span>
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-400 group-hover:text-neutral-600 transition-colors">
+          ¿Querés uno para tu negocio? Contratalo acá
+        </span>
+      </a>
+    </footer>
   );
 }
 
