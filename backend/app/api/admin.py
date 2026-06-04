@@ -20,10 +20,13 @@ from app.schemas.admin import (
     AccesoOut,
     AsistenciaIn,
     ClienteAdminOut,
+    ClienteFrecuenteOut,
     DashboardOut,
     EstadisticaDiaOut,
     EstadisticasOut,
+    ReportesOut,
     ReservaAdminOut,
+    ServicioPopularOut,
     ServicioSugerido,
     SugerenciaIn,
     SugerenciaOut,
@@ -285,6 +288,143 @@ def estadisticas(
         resultado.append(EstadisticaDiaOut(fecha=dia, turnos=conteo.get(dia, 0)))
 
     return EstadisticasOut(datos=resultado)
+
+
+_DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+_FRANJAS_HORA = [
+    (0, 6, "Madrugada"),
+    (6, 12, "Mañana"),
+    (12, 17, "Tarde"),
+    (17, 21, "Tarde-noche"),
+    (21, 24, "Noche"),
+]
+
+
+@router.get("/reportes", response_model=ReportesOut)
+def reportes(
+    desde: date_type,
+    hasta: date_type,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> ReportesOut:
+    from decimal import Decimal as D
+
+    negocio = db.get(Negocio, admin.negocio_id)
+    tz = ZoneInfo(negocio.zona_horaria)
+    desde_utc = datetime.combine(desde, time.min, tzinfo=tz).astimezone(ZoneInfo("UTC"))
+    hasta_utc = datetime.combine(hasta + timedelta(days=1), time.min, tzinfo=tz).astimezone(ZoneInfo("UTC"))
+
+    estados_validos = [EstadoReserva.confirmada, EstadoReserva.completada,
+                       EstadoReserva.cancelada, EstadoReserva.no_show]
+
+    reservas = list(db.scalars(
+        select(Reserva).where(
+            Reserva.negocio_id == negocio.id,
+            Reserva.estado.in_(estados_validos),
+            Reserva.inicio >= desde_utc,
+            Reserva.inicio < hasta_utc,
+        )
+    ))
+
+    # ── Conteos por estado ────────────────────────────────────────────────
+    total = len(reservas)
+    completadas = sum(1 for r in reservas if r.estado == EstadoReserva.completada)
+    confirmadas = sum(1 for r in reservas if r.estado == EstadoReserva.confirmada)
+    canceladas = sum(1 for r in reservas if r.estado == EstadoReserva.cancelada)
+    no_shows = sum(1 for r in reservas if r.estado == EstadoReserva.no_show)
+
+    # Ingresos: solo turnos completados y confirmados
+    reservas_activas = [r for r in reservas
+                        if r.estado in (EstadoReserva.completada, EstadoReserva.confirmada)]
+    ingresos = sum(r.total_precio for r in reservas_activas) if reservas_activas else D("0")
+    promedio = (ingresos / len(reservas_activas)) if reservas_activas else D("0")
+
+    tasa_no_show = round(no_shows / total * 100, 1) if total else 0.0
+    tasa_cancelacion = round(canceladas / total * 100, 1) if total else 0.0
+
+    # ── Top 5 servicios ───────────────────────────────────────────────────
+    reserva_ids = [r.id for r in reservas_activas]
+    servicios_ranking: list[ServicioPopularOut] = []
+    if reserva_ids:
+        filas = db.execute(
+            select(
+                Servicio.nombre,
+                func.count(ReservaItem.servicio_id).label("cant"),
+                func.sum(Servicio.precio).label("ing"),
+            )
+            .join(ReservaItem, ReservaItem.servicio_id == Servicio.id)
+            .where(ReservaItem.reserva_id.in_(reserva_ids))
+            .group_by(Servicio.nombre)
+            .order_by(func.count(ReservaItem.servicio_id).desc())
+            .limit(5)
+        ).all()
+        servicios_ranking = [
+            ServicioPopularOut(nombre=n, cantidad=c, ingresos=D(str(i or 0)))
+            for n, c, i in filas
+        ]
+
+    # ── Top 5 clientes frecuentes ─────────────────────────────────────────
+    clientes_ranking: list[ClienteFrecuenteOut] = []
+    if reserva_ids:
+        cliente_ids = [r.cliente_id for r in reservas_activas if r.cliente_id]
+        if cliente_ids:
+            filas_c = db.execute(
+                select(
+                    Cliente.nombre,
+                    Cliente.telefono,
+                    func.count(Reserva.id).label("cant"),
+                )
+                .join(Reserva, Reserva.cliente_id == Cliente.id)
+                .where(
+                    Reserva.id.in_(reserva_ids),
+                    Cliente.id.in_(cliente_ids),
+                )
+                .group_by(Cliente.id, Cliente.nombre, Cliente.telefono)
+                .order_by(func.count(Reserva.id).desc())
+                .limit(5)
+            ).all()
+            clientes_ranking = [
+                ClienteFrecuenteOut(nombre=n, telefono=t, turnos=c)
+                for n, t, c in filas_c
+            ]
+
+    # ── Mejor día de la semana ─────────────────────────────────────────────
+    mejor_dia: str | None = None
+    if reservas_activas:
+        conteo_dia: dict[int, int] = {}
+        for r in reservas_activas:
+            dia = r.inicio.astimezone(tz).weekday()  # 0=lun
+            conteo_dia[dia] = conteo_dia.get(dia, 0) + 1
+        mejor_dia = _DIAS_SEMANA[max(conteo_dia, key=conteo_dia.get)]
+
+    # ── Hora pico ─────────────────────────────────────────────────────────
+    hora_pico: str | None = None
+    if reservas_activas:
+        conteo_franja: dict[str, int] = {}
+        for r in reservas_activas:
+            hora = r.inicio.astimezone(tz).hour
+            for h_ini, h_fin, label in _FRANJAS_HORA:
+                if h_ini <= hora < h_fin:
+                    conteo_franja[label] = conteo_franja.get(label, 0) + 1
+                    break
+        hora_pico = max(conteo_franja, key=conteo_franja.get) if conteo_franja else None
+
+    return ReportesOut(
+        desde=desde,
+        hasta=hasta,
+        ingresos_total=ingresos.quantize(D("0.01")),
+        ingresos_promedio=promedio.quantize(D("0.01")),
+        turnos_total=total,
+        turnos_completados=completadas + confirmadas,
+        turnos_cancelados=canceladas,
+        turnos_no_show=no_shows,
+        tasa_no_show=tasa_no_show,
+        tasa_cancelacion=tasa_cancelacion,
+        servicios_populares=servicios_ranking,
+        clientes_frecuentes=clientes_ranking,
+        mejor_dia_semana=mejor_dia,
+        hora_pico=hora_pico,
+    )
 
 
 _PROMPT_SISTEMA = """\

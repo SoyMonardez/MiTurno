@@ -86,3 +86,38 @@ class DashboardOut(BaseModel):
 
 class SugerenciaCategoriasOut(BaseModel):
     categorias: list[str]
+
+
+class ServicioPopularOut(BaseModel):
+    nombre: str
+    cantidad: int
+    ingresos: Decimal
+
+
+class ClienteFrecuenteOut(BaseModel):
+    nombre: str
+    telefono: str | None
+    turnos: int
+
+
+class ReportesOut(BaseModel):
+    # Período
+    desde: date
+    hasta: date
+    # Ingresos
+    ingresos_total: Decimal
+    ingresos_promedio: Decimal
+    # Turnos
+    turnos_total: int
+    turnos_completados: int
+    turnos_cancelados: int
+    turnos_no_show: int
+    tasa_no_show: float        # 0–100 %
+    tasa_cancelacion: float    # 0–100 %
+    # Rankings
+    servicios_populares: list[ServicioPopularOut]   # top 5
+    clientes_frecuentes: list[ClienteFrecuenteOut]  # top 5
+    # Mejor día de la semana (0=lun…6=dom)
+    mejor_dia_semana: str | None
+    # Hora pico (franja con más turnos)
+    hora_pico: str | None

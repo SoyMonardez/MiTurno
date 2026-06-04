@@ -1,8 +1,10 @@
 import {
+  BarChart2,
   Calendar,
   Check,
   ChevronRight,
   Clock,
+  Crown,
   LayoutGrid,
   LogOut,
   Plus,
@@ -10,6 +12,7 @@ import {
   SlidersHorizontal,
   Star,
   Trash2,
+  TrendingUp,
   User,
   Users,
   X,
@@ -32,6 +35,7 @@ const TABS = [
   { id: "Turnos", label: "Turnos", icon: Calendar },
   { id: "Clientes", label: "Clientes", icon: Users },
   { id: "Reseñas", label: "Reseñas", icon: Star },
+  { id: "Reportes", label: "Reportes", icon: BarChart2 },
   { id: "Gestión", label: "Gestión", icon: SlidersHorizontal },
 ];
 
@@ -126,6 +130,7 @@ export default function AdminPanel() {
         {tab === "Turnos" && <Turnos onError={onError} />}
         {tab === "Clientes" && <Clientes onError={onError} />}
         {tab === "Reseñas" && <Resenas onError={onError} />}
+        {tab === "Reportes" && <Reportes onError={onError} />}
         {tab === "Gestión" && <AdminGestion onError={onError} />}
       </main>
 
@@ -859,6 +864,200 @@ function TarjetaCliente({ cliente: c }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Reportes ─────────────────────────────────────────────────────────────────
+
+const MESES_RAPIDOS = [
+  { label: "Este mes", fn: () => {
+    const h = new Date(); const d = new Date(h.getFullYear(), h.getMonth(), 1);
+    return [isoFecha(d), isoFecha(h)];
+  }},
+  { label: "Mes pasado", fn: () => {
+    const h = new Date(); const d = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+    const hasta = new Date(h.getFullYear(), h.getMonth(), 0);
+    return [isoFecha(d), isoFecha(hasta)];
+  }},
+  { label: "Últimos 90 días", fn: () => {
+    const h = new Date(); const d = new Date(h.getTime() - 89 * 86400000);
+    return [isoFecha(d), isoFecha(h)];
+  }},
+];
+
+function Reportes({ onError }) {
+  const hoy = isoFecha(new Date());
+  const primerDiaMes = isoFecha(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [desde, setDesde] = useState(primerDiaMes);
+  const [hasta, setHasta] = useState(hoy);
+  const [data, setData] = useState(null);
+  const [cargando, setCargando] = useState(false);
+
+  const cargar = useCallback((d = desde, h = hasta) => {
+    setCargando(true);
+    setData(null);
+    apiGet(`/admin/reportes?desde=${d}&hasta=${h}`)
+      .then(setData)
+      .catch(onError)
+      .finally(() => setCargando(false));
+  }, [desde, hasta, onError]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  function aplicarRapido(fn) {
+    const [d, h] = fn();
+    setDesde(d); setHasta(h);
+    cargar(d, h);
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Selector de período */}
+      <div className="bg-white rounded-2xl border border-neutral-200 p-4 flex flex-wrap gap-4 items-end">
+        <div className="flex gap-2 items-end">
+          <Fecha label="Desde" value={desde} onChange={(e) => setDesde(e.target.value)} />
+          <ChevronRight size={16} className="text-neutral-300 mb-2.5" />
+          <Fecha label="Hasta" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+        </div>
+        <div className="flex gap-1.5 pb-0.5 flex-wrap">
+          {MESES_RAPIDOS.map((m) => (
+            <button key={m.label} onClick={() => aplicarRapido(m.fn)}
+              className="text-xs uppercase tracking-[0.1em] rounded-full border border-neutral-300 px-3 py-1.5 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 transition-colors">
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => cargar()}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2 hover:bg-neutral-800 transition-colors">
+          <TrendingUp size={14} /> Ver reporte
+        </button>
+      </div>
+
+      {cargando && <Cargando />}
+
+      {data && !cargando && (
+        <>
+          {/* Ingresos */}
+          <div>
+            <TituloSeccion>Ingresos</TituloSeccion>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+                <div className="font-serif text-3xl text-neutral-900">{formatoPrecio(data.ingresos_total)}</div>
+                <div className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mt-1">Total del período</div>
+              </div>
+              <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+                <div className="font-serif text-3xl text-neutral-900">{formatoPrecio(data.ingresos_promedio)}</div>
+                <div className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mt-1">Promedio por turno</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Turnos */}
+          <div>
+            <TituloSeccion>Turnos</TituloSeccion>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Realizados", valor: data.turnos_completados, color: "text-neutral-900" },
+                { label: "Cancelados", valor: data.turnos_cancelados, color: "text-neutral-500" },
+                { label: "No asistió", valor: data.turnos_no_show, color: "text-red-500" },
+                { label: "Total", valor: data.turnos_total, color: "text-neutral-900" },
+              ].map((m) => (
+                <div key={m.label} className="rounded-2xl border border-neutral-200 bg-white p-4">
+                  <div className={`font-serif text-2xl ${m.color}`}>{m.valor}</div>
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mt-1">{m.label}</div>
+                </div>
+              ))}
+            </div>
+            {/* Tasas */}
+            {data.turnos_total > 0 && (
+              <div className="mt-3 flex gap-4 text-sm text-neutral-500 px-1">
+                <span>Tasa no-show: <span className={`font-medium ${data.tasa_no_show > 20 ? "text-red-500" : "text-neutral-700"}`}>{data.tasa_no_show}%</span></span>
+                <span>Tasa cancelación: <span className={`font-medium ${data.tasa_cancelacion > 30 ? "text-red-500" : "text-neutral-700"}`}>{data.tasa_cancelacion}%</span></span>
+              </div>
+            )}
+          </div>
+
+          {/* Insights */}
+          {(data.mejor_dia_semana || data.hora_pico) && (
+            <div>
+              <TituloSeccion>Insights</TituloSeccion>
+              <div className="grid grid-cols-2 gap-3">
+                {data.mejor_dia_semana && (
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-5 flex items-center gap-3">
+                    <Calendar size={20} className="text-neutral-400" strokeWidth={1.5} />
+                    <div>
+                      <div className="font-medium text-neutral-900">{data.mejor_dia_semana}</div>
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-neutral-400">Mejor día</div>
+                    </div>
+                  </div>
+                )}
+                {data.hora_pico && (
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-5 flex items-center gap-3">
+                    <Clock size={20} className="text-neutral-400" strokeWidth={1.5} />
+                    <div>
+                      <div className="font-medium text-neutral-900">{data.hora_pico}</div>
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-neutral-400">Hora pico</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Servicios populares */}
+          {data.servicios_populares?.length > 0 && (
+            <div>
+              <TituloSeccion>Servicios más vendidos</TituloSeccion>
+              <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+                {data.servicios_populares.map((s, i) => (
+                  <div key={s.nombre} className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-100 last:border-0">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-medium text-neutral-400 w-5 text-right">{i + 1}</span>
+                      <span className="text-sm text-neutral-900">{s.nombre}</span>
+                      <span className="text-xs text-neutral-400">{s.cantidad} {s.cantidad === 1 ? "vez" : "veces"}</span>
+                    </div>
+                    <span className="text-sm font-medium text-neutral-700">{formatoPrecio(s.ingresos)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Clientes frecuentes */}
+          {data.clientes_frecuentes?.length > 0 && (
+            <div>
+              <TituloSeccion>Clientes frecuentes</TituloSeccion>
+              <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+                {data.clientes_frecuentes.map((c, i) => (
+                  <div key={c.nombre + i} className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-100 last:border-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center text-xs flex-shrink-0">
+                        {iniciales(c.nombre)}
+                      </div>
+                      <div>
+                        <div className="text-sm text-neutral-900">{c.nombre}</div>
+                        {c.telefono && <div className="text-xs text-neutral-400">{c.telefono}</div>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      {i === 0 && <Crown size={12} className="text-amber-400" />}
+                      {c.turnos} {c.turnos === 1 ? "turno" : "turnos"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.turnos_total === 0 && (
+            <div className="text-center py-12 text-neutral-300">
+              <BarChart2 size={36} className="mx-auto mb-3" strokeWidth={1} />
+              <p className="text-sm text-neutral-400">No hay turnos en este período.</p>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
