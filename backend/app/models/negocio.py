@@ -19,6 +19,7 @@ class Negocio(Base):
     email_notificaciones: Mapped[str | None] = mapped_column(String(255), default=None)
     logo: Mapped[str | None] = mapped_column(String(500), default=None)
     icono: Mapped[str] = mapped_column(String(40), default="scissors")
+    plan: Mapped[str] = mapped_column(String(20), default="pro")
     redes: Mapped[str | None] = mapped_column(String(1000), default=None)
     mapa_url: Mapped[str | None] = mapped_column(String(1000), default=None)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)

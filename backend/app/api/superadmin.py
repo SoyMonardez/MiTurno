@@ -18,11 +18,14 @@ from app.models.profesional import ExcepcionAgenda, HorarioRecurrente, Profesion
 from app.models.reserva import Reserva, ReservaItem
 from app.models.resena import Resena
 from app.schemas.superadmin import (
+    AdminResumen,
     MetricasGlobales,
     NegocioActivar,
     NegocioConAdminCreate,
     NegocioEditar,
     NegocioResumen,
+    NuevoAdminCreate,
+    PLAN_PRECIOS,
     ResetAdminPassword,
 )
 
@@ -30,26 +33,40 @@ router = APIRouter(prefix="/super-admin", tags=["super-admin"])
 
 
 def _resumen_negocio(negocio: Negocio, db: Session) -> NegocioResumen:
-    admin = db.scalar(
+    admins = list(db.scalars(
         select(Usuario)
         .where(Usuario.negocio_id == negocio.id, Usuario.rol == RolUsuario.admin)
         .order_by(Usuario.id)
-    )
+    ))
+    primer_admin = admins[0] if admins else None
     total_turnos = db.scalar(
         select(func.count(Reserva.id)).where(Reserva.negocio_id == negocio.id)
     )
     total_clientes = db.scalar(
         select(func.count(Cliente.id)).where(Cliente.negocio_id == negocio.id)
     )
+    plan = negocio.plan or "pro"
     return NegocioResumen(
         id=negocio.id,
         nombre=negocio.nombre,
         slug=negocio.slug,
         activo=negocio.activo,
+        plan=plan,
+        precio_mensual=PLAN_PRECIOS.get(plan, 22_000),
         creado_en=negocio.creado_en,
-        admin_nombre=admin.nombre if admin else None,
-        admin_username=admin.username if admin else None,
-        admin_dni=admin.dni if admin else None,
+        admins=[
+            AdminResumen(
+                id=a.id,
+                nombre=a.nombre,
+                username=a.username,
+                dni=a.dni,
+                activo=a.activo,
+            )
+            for a in admins
+        ],
+        admin_nombre=primer_admin.nombre if primer_admin else None,
+        admin_username=primer_admin.username if primer_admin else None,
+        admin_dni=primer_admin.dni if primer_admin else None,
         total_turnos=total_turnos or 0,
         total_clientes=total_clientes or 0,
     )
@@ -60,16 +77,17 @@ def metricas_globales(
     _: Usuario = Depends(get_current_super_admin), db: Session = Depends(get_db)
 ) -> MetricasGlobales:
     hace_30 = datetime.now(ZoneInfo("UTC")) - timedelta(days=30)
+    negocios_activos_lista = list(db.scalars(
+        select(Negocio).where(Negocio.activo)
+    ))
+    facturacion_mensual = sum(
+        PLAN_PRECIOS.get(n.plan or "pro", 22_000) for n in negocios_activos_lista
+    )
     return MetricasGlobales(
         total_negocios=db.scalar(select(func.count(Negocio.id))) or 0,
-        negocios_activos=db.scalar(
-            select(func.count(Negocio.id)).where(Negocio.activo)
-        ) or 0,
-        total_turnos=db.scalar(select(func.count(Reserva.id))) or 0,
-        total_clientes=db.scalar(select(func.count(Cliente.id))) or 0,
-        turnos_ultimos_30_dias=db.scalar(
-            select(func.count(Reserva.id)).where(Reserva.creado_en >= hace_30)
-        ) or 0,
+        negocios_activos=len(negocios_activos_lista),
+        facturacion_mensual=facturacion_mensual,
+        facturacion_anual=facturacion_mensual * 12,
     )
 
 
@@ -99,6 +117,7 @@ def crear_negocio_con_admin(
         direccion=data.direccion,
         zona_horaria=data.zona_horaria,
         email_notificaciones=data.email_notificaciones,
+        plan=data.plan,
     )
     db.add(negocio)
     db.flush()
@@ -213,6 +232,8 @@ def editar_negocio(
         raise HTTPException(409, f"La URL '/{slug_limpio}' ya está en uso por otro negocio.")
     negocio.nombre = data.nombre.strip()
     negocio.slug = slug_limpio
+    if data.plan in PLAN_PRECIOS:
+        negocio.plan = data.plan
     db.commit()
     db.refresh(negocio)
     return _resumen_negocio(negocio, db)
@@ -232,3 +253,68 @@ def activar_negocio(
     db.commit()
     db.refresh(negocio)
     return _resumen_negocio(negocio, db)
+
+
+# ── Admins adicionales por sucursal ──────────────────────────────────────────
+
+@router.get("/negocios/{negocio_id}/admins", response_model=list[AdminResumen])
+def listar_admins(
+    negocio_id: int,
+    _: Usuario = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+) -> list[AdminResumen]:
+    admins = list(db.scalars(
+        select(Usuario)
+        .where(Usuario.negocio_id == negocio_id, Usuario.rol == RolUsuario.admin)
+        .order_by(Usuario.id)
+    ))
+    return [AdminResumen(id=a.id, nombre=a.nombre, username=a.username, dni=a.dni, activo=a.activo) for a in admins]
+
+
+@router.post("/negocios/{negocio_id}/admins", response_model=AdminResumen, status_code=201)
+def agregar_admin(
+    negocio_id: int,
+    data: NuevoAdminCreate,
+    _: Usuario = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+) -> AdminResumen:
+    if not db.get(Negocio, negocio_id):
+        raise HTTPException(404, "Negocio no encontrado")
+    if db.scalar(select(Usuario).where(Usuario.username == data.username)):
+        raise HTTPException(409, "Ese nombre de usuario ya existe")
+    admin = Usuario(
+        negocio_id=negocio_id,
+        email=data.email,
+        nombre=data.nombre,
+        rol=RolUsuario.admin,
+        username=data.username,
+        dni=data.dni,
+        password_hash=hash_password(data.password),
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return AdminResumen(id=admin.id, nombre=admin.nombre, username=admin.username, dni=admin.dni, activo=admin.activo)
+
+
+@router.delete("/negocios/{negocio_id}/admins/{admin_id}", status_code=204)
+def eliminar_admin(
+    negocio_id: int,
+    admin_id: int,
+    _: Usuario = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    admin = db.get(Usuario, admin_id)
+    if not admin or admin.negocio_id != negocio_id or admin.rol != RolUsuario.admin:
+        raise HTTPException(404, "Admin no encontrado")
+    # No se puede eliminar si es el único admin
+    total = db.scalar(
+        select(func.count(Usuario.id))
+        .where(Usuario.negocio_id == negocio_id, Usuario.rol == RolUsuario.admin)
+    )
+    if (total or 0) <= 1:
+        raise HTTPException(400, "No podés eliminar el único admin de esta sucursal")
+    for acc in db.scalars(select(RegistroAcceso).where(RegistroAcceso.usuario_id == admin_id)):
+        db.delete(acc)
+    db.delete(admin)
+    db.commit()
