@@ -161,16 +161,33 @@ def dashboard(
         hoy + timedelta(days=7), time.min, tzinfo=tz
     ).astimezone(ZoneInfo("UTC"))
 
+    # Contamos turnos reales del período: confirmados + completados
+    # (los completados también "cuentan" como turnos del día/semana).
+    estados_activos = [EstadoReserva.confirmada, EstadoReserva.completada]
+
     def _contar(desde, hasta):
         return db.scalar(
             select(func.count(Reserva.id)).where(
                 Reserva.negocio_id == negocio.id,
-                Reserva.estado == EstadoReserva.confirmada,
+                Reserva.estado.in_(estados_activos),
                 Reserva.inicio >= desde,
                 Reserva.inicio < hasta,
             )
         )
 
+    # Turnos de hoy (confirmados y completados), ordenados por hora.
+    turnos_hoy_lista = db.scalars(
+        select(Reserva)
+        .where(
+            Reserva.negocio_id == negocio.id,
+            Reserva.estado.in_(estados_activos),
+            Reserva.inicio >= inicio_hoy,
+            Reserva.inicio < fin_hoy,
+        )
+        .order_by(Reserva.inicio)
+    )
+
+    # Próximos turnos confirmados (de hoy en adelante).
     proximas = db.scalars(
         select(Reserva)
         .where(
@@ -200,6 +217,7 @@ def dashboard(
     return DashboardOut(
         turnos_hoy=_contar(inicio_hoy, fin_hoy),
         turnos_semana=_contar(inicio_hoy, fin_semana),
+        hoy=[_serializar_reserva(r, db) for r in turnos_hoy_lista],
         proximos=[_serializar_reserva(r, db) for r in proximas],
         accesos_recientes=[
             AccesoOut(usuario_nombre=n, usuario_dni=d, ingreso_en=i) for n, d, i in accesos
@@ -509,6 +527,8 @@ def actualizar_negocio(
         negocio.email_notificaciones = data.email_notificaciones
     if data.logo is not None:
         negocio.logo = data.logo
+    if data.icono is not None:
+        negocio.icono = data.icono
     if data.redes is not None:
         negocio.redes = data.redes
     if data.mapa_url is not None:

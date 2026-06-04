@@ -1,4 +1,4 @@
-import { Lock, Scissors } from "lucide-react";
+import { CalendarClock, Lock } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiPost, setNegocioId, setToken } from "../api/client.js";
@@ -48,7 +48,7 @@ export default function AdminLogin() {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
             <span className="h-px w-8 bg-white/30" />
-            <Scissors size={16} className="text-white/60" strokeWidth={1.5} />
+            <CalendarClock size={16} className="text-white/60" strokeWidth={1.5} />
             <span className="h-px w-8 bg-white/30" />
           </div>
           <h1 className="font-serif text-3xl text-white tracking-[0.06em]">MiTurno</h1>

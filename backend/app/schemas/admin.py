@@ -79,6 +79,7 @@ class SugerenciaTextoOut(BaseModel):
 class DashboardOut(BaseModel):
     turnos_hoy: int
     turnos_semana: int
+    hoy: list[ReservaAdminOut]
     proximos: list[ReservaAdminOut]
     accesos_recientes: list[AccesoOut]
 

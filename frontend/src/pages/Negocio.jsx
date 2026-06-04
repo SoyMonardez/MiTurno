@@ -1537,7 +1537,11 @@ function PasoDatosContacto({
           <div className="flex items-center gap-1.5 rounded-xl border border-neutral-300 px-3.5 text-sm text-neutral-600 flex-shrink-0">
             <Phone size={13} strokeWidth={1.5} /> +54
           </div>
-          <input value={datos.telefono} onChange={set("telefono")} placeholder="Número" className="campo-modal flex-1" />
+          <input
+            type="tel" inputMode="numeric" autoComplete="tel" pattern="[0-9]*"
+            value={datos.telefono} onChange={set("telefono")} placeholder="Número"
+            className="campo-modal flex-1"
+          />
         </div>
       </div>
 

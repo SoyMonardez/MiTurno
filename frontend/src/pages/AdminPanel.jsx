@@ -5,7 +5,6 @@ import {
   Clock,
   LayoutGrid,
   LogOut,
-  Scissors,
   Search,
   SlidersHorizontal,
   Star,
@@ -14,13 +13,18 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPost, clearToken, getNegocioId } from "../api/client.js";
 import { useDialog } from "../components/Dialog.jsx";
 import { fechaHora, formatoPrecio, isoFecha } from "../lib/format.js";
+import { ICONO_DEFAULT, IconoNegocio } from "../lib/iconos.jsx";
 import AdminGestion from "./AdminGestion.jsx";
 import SEO from "../components/SEO.jsx";
+
+// Contexto con la clave de ícono del negocio, para que header y tarjetas
+// muestren el ícono correcto según el rubro (no siempre una tijera).
+const IconoNegocioContext = createContext(ICONO_DEFAULT);
 
 const TABS = [
   { id: "Dashboard", label: "Inicio", icon: LayoutGrid },
@@ -57,6 +61,7 @@ function iniciales(nombre = "") {
 export default function AdminPanel() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("Dashboard");
+  const [icono, setIcono] = useState(ICONO_DEFAULT);
 
   const onError = useCallback(
     (err) => {
@@ -68,6 +73,13 @@ export default function AdminPanel() {
     [navigate]
   );
 
+  // Cargamos el ícono del negocio para adaptar el panel a cualquier rubro.
+  useEffect(() => {
+    apiGet("/admin/negocio")
+      .then((n) => setIcono(n.icono || ICONO_DEFAULT))
+      .catch(() => {});
+  }, []);
+
   function salir() {
     clearToken();
     navigate("/admin/login");
@@ -76,12 +88,13 @@ export default function AdminPanel() {
   const tabActual = TABS.find((t) => t.id === tab);
 
   return (
+    <IconoNegocioContext.Provider value={icono}>
     <div className="min-h-screen bg-neutral-100">
       <SEO noIndex title="Panel de Control - Administración | MiTurno" />
       <header className="bg-neutral-950 text-white sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Scissors size={16} className="text-neutral-400" strokeWidth={1.5} />
+            <IconoNegocio clave={icono} size={16} className="text-neutral-400" strokeWidth={1.5} />
             {/* En móvil: título de la sección actual. En desktop: nombre completo */}
             <h1 className="font-serif text-lg tracking-[0.05em]">
               <span className="sm:hidden">{tabActual?.id}</span>
@@ -142,6 +155,7 @@ export default function AdminPanel() {
         </div>
       </nav>
     </div>
+    </IconoNegocioContext.Provider>
   );
 }
 
@@ -179,6 +193,13 @@ function Dashboard({ onError }) {
       </div>
 
       {stats && <GraficoTrafico datos={stats.datos} />}
+
+      {data.hoy?.length > 0 && (
+        <section>
+          <TituloSeccion>Turnos de hoy</TituloSeccion>
+          <ListaTurnos turnos={data.hoy} />
+        </section>
+      )}
 
       <section>
         <TituloSeccion>Próximos turnos</TituloSeccion>
@@ -377,6 +398,7 @@ function Turnos({ onError }) {
 }
 
 function TarjetaTurno({ turno: t, conAcciones, onCompletar, onNoShow, onCancelar }) {
+  const iconoNegocio = useContext(IconoNegocioContext);
   const wa = formatearWhatsapp(t.cliente_telefono);
   const cfg = ESTADO_CONFIG[t.estado] ?? ESTADO_CONFIG.cancelada;
   const fecha = new Date(t.inicio);
@@ -427,7 +449,7 @@ function TarjetaTurno({ turno: t, conAcciones, onCompletar, onNoShow, onCancelar
             {/* Services */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-1.5">
-                <Scissors size={12} className="text-neutral-300 flex-shrink-0" strokeWidth={1.5} />
+                <IconoNegocio clave={iconoNegocio} size={12} className="text-neutral-300 flex-shrink-0" strokeWidth={1.5} />
                 <div className="flex flex-wrap gap-1">
                   {t.servicios.map((s) => (
                     <span key={s} className="text-xs border border-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full truncate max-w-[150px]">{s}</span>

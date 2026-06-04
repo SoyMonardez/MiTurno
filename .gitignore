@@ -23,3 +23,6 @@ Thumbs.db
 
 # Docker overrides
 docker-compose.override.yml
+
+# Celery runtime schedule (no versionar)
+backend/celerybeat-schedule
