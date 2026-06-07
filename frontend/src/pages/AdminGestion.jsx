@@ -361,6 +361,16 @@ function ConfigNegocio({ onError }) {
     return (e) => setForm({ ...form, [k]: e.target.value });
   }
 
+  // El logo del cartel se guarda al instante (sin esperar a "Guardar cambios").
+  async function guardarLogoQr(url) {
+    setForm((p) => ({ ...p, logo_qr: url || null }));
+    try {
+      await apiPatch("/negocios/mi-negocio", { logo_qr: url || null });
+    } catch (err) {
+      onError(err);
+    }
+  }
+
   async function guardar(e) {
     e.preventDefault();
     setGuardando(true);
@@ -373,6 +383,7 @@ function ConfigNegocio({ onError }) {
         zona_horaria: form.zona_horaria,
         email_notificaciones: form.email_notificaciones || null,
         logo: form.logo || null,
+        logo_qr: form.logo_qr || null,
         icono: form.icono || "scissors",
         cancelacion_anticipacion_min: form.cancelacion_anticipacion_min ?? 20,
         redes: form.redes || null,
@@ -525,19 +536,33 @@ function ConfigNegocio({ onError }) {
       </form>
     </div>
 
-    {/* Código QR de la sucursal */}
+    {/* Cartel con QR de la sucursal */}
     <div className="rounded-2xl border border-neutral-200 bg-white p-6">
       <div className="flex items-center gap-2 mb-1">
         <QrCode size={16} className="text-neutral-700" strokeWidth={1.5} />
-        <h3 className="font-serif text-lg text-neutral-900">Mi código QR</h3>
+        <h3 className="font-serif text-lg text-neutral-900">Cartel con QR</h3>
       </div>
       <p className="text-xs text-neutral-400 mb-5">
-        Descargalo e imprimilo en el local. Lleva directo a tu página de reservas:
+        Personalizalo, descargalo e imprimilo para tu local. Lleva directo a tu página de reservas:
         <a href={urlPublica} target="_blank" rel="noopener noreferrer" className="text-neutral-600 hover:text-neutral-900 ml-1 break-all">{urlPublica}</a>
       </p>
+
+      {/* Logo específico del QR (opcional) */}
+      <div className="mb-5 max-w-[200px]">
+        <Etiqueta icono={<ImageIcon size={12} />} label="Logo del cartel (opcional)" />
+        <ImageUploader
+          value={form.logo_qr || ""}
+          onChange={guardarLogoQr}
+          onError={onError}
+          alto="h-28"
+        />
+        <p className="text-[11px] text-neutral-400 mt-1">Si lo dejás vacío, se usa el logo del negocio.</p>
+      </div>
+
       <QRGenerator
         url={urlPublica}
-        logoUrl={form.logo || null}
+        logoUrl={form.logo_qr || form.logo || null}
+        businessName={form.nombre}
         slug={form.slug}
       />
     </div>

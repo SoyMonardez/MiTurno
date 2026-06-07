@@ -11,6 +11,7 @@ class NegocioBase(BaseModel):
     zona_horaria: str = "America/Argentina/Buenos_Aires"
     email_notificaciones: str | None = None
     logo: str | None = None
+    logo_qr: str | None = None
     icono: str = "scissors"
     cancelacion_anticipacion_min: int = 20
     redes: str | None = None
@@ -28,6 +29,7 @@ class NegocioUpdate(BaseModel):
     zona_horaria: str | None = None
     email_notificaciones: str | None = None
     logo: str | None = None
+    logo_qr: str | None = None
     icono: str | None = None
     cancelacion_anticipacion_min: int | None = None
     redes: str | None = None

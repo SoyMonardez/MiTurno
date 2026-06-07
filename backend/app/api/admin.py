@@ -721,6 +721,8 @@ def actualizar_negocio(
         negocio.email_notificaciones = data.email_notificaciones
     if data.logo is not None:
         negocio.logo = data.logo
+    if data.logo_qr is not None:
+        negocio.logo_qr = data.logo_qr
     if data.icono is not None:
         negocio.icono = data.icono
     if data.cancelacion_anticipacion_min is not None:

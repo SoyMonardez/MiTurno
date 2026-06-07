@@ -18,6 +18,8 @@ class Negocio(Base):
     zona_horaria: Mapped[str] = mapped_column(String(64), default="America/Argentina/Buenos_Aires")
     email_notificaciones: Mapped[str | None] = mapped_column(String(255), default=None)
     logo: Mapped[str | None] = mapped_column(String(500), default=None)
+    # Logo opcional específico para el cartel/QR (si difiere del logo principal).
+    logo_qr: Mapped[str | None] = mapped_column(String(500), default=None)
     icono: Mapped[str] = mapped_column(String(40), default="scissors")
     plan: Mapped[str] = mapped_column(String(20), default="pro")
     # Minutos de anticipación mínima para que el cliente pueda cancelar online.
