@@ -33,6 +33,9 @@ async def subir_imagen(
     destino = UPLOAD_DIR / nombre
     destino.write_bytes(contenido)
 
-    # URL absoluta para que el frontend pueda mostrarla directo
-    base = str(request.base_url).rstrip("/")
+    # URL absoluta para que el frontend pueda mostrarla directo.
+    # Usamos FRONTEND_URL (https en producción) para evitar que quede http
+    # detrás del proxy, lo que causaría contenido mixto en páginas https.
+    from app.core.config import settings
+    base = (settings.frontend_url or str(request.base_url)).rstrip("/")
     return {"url": f"{base}/uploads/{nombre}"}

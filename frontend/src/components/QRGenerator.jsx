@@ -19,7 +19,18 @@ export default function QRGenerator({
   const qrRef = useRef(null);
   const [incluirLogo, setIncluirLogo] = useState(Boolean(logoUrl));
 
-  const logoActivo = incluirLogo && logoUrl ? logoUrl : undefined;
+  // Si la página corre en https, forzamos el logo a https para evitar
+  // contenido mixto (el navegador bloquea imágenes http en páginas https,
+  // lo que dejaba el QR en blanco al incluir el logo).
+  const logoSeguro = (() => {
+    if (!logoUrl) return null;
+    if (typeof window !== "undefined" && window.location.protocol === "https:") {
+      return logoUrl.replace(/^http:\/\//i, "https://");
+    }
+    return logoUrl;
+  })();
+
+  const logoActivo = incluirLogo && logoSeguro ? logoSeguro : undefined;
 
   const buildOptions = (width) => ({
     width,
