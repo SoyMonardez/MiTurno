@@ -12,6 +12,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  QrCode,
   Send,
   Sparkles,
   Store,
@@ -27,6 +28,7 @@ import { useDialog } from "../components/Dialog.jsx";
 import { ICONOS } from "../lib/iconos.jsx";
 import { formatoPrecio } from "../lib/format.js";
 import ImageUploader from "../components/ImageUploader.jsx";
+import QRGenerator from "../components/QRGenerator.jsx";
 
 const SUBTABS = [
   { id: "Servicios", icon: Tag, label: "Servicios" },
@@ -381,8 +383,10 @@ function ConfigNegocio({ onError }) {
   }
 
   if (!form) return <Cargando />;
+  const urlPublica = `${window.location.origin}/${form.slug}`;
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-6 max-w-2xl">
+    <div className="space-y-5 max-w-2xl">
+    <div className="rounded-2xl border border-neutral-200 bg-white p-6">
       <div className="flex items-center gap-2 mb-5">
         <Store size={16} className="text-neutral-700" strokeWidth={1.5} />
         <h3 className="font-serif text-lg text-neutral-900">Datos del negocio</h3>
@@ -484,6 +488,24 @@ function ConfigNegocio({ onError }) {
           )}
         </div>
       </form>
+    </div>
+
+    {/* Código QR de la sucursal */}
+    <div className="rounded-2xl border border-neutral-200 bg-white p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <QrCode size={16} className="text-neutral-700" strokeWidth={1.5} />
+        <h3 className="font-serif text-lg text-neutral-900">Mi código QR</h3>
+      </div>
+      <p className="text-xs text-neutral-400 mb-5">
+        Descargalo e imprimilo en el local. Lleva directo a tu página de reservas:
+        <a href={urlPublica} target="_blank" rel="noopener noreferrer" className="text-neutral-600 hover:text-neutral-900 ml-1 break-all">{urlPublica}</a>
+      </p>
+      <QRGenerator
+        url={urlPublica}
+        logoUrl={form.logo || null}
+        slug={form.slug}
+      />
+    </div>
     </div>
   );
 }
