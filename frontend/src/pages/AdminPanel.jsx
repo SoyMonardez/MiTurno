@@ -355,35 +355,37 @@ function Turnos({ onError }) {
   return (
     <div className="space-y-4">
       {/* Filtros de fecha */}
-      <div className="bg-white rounded-2xl border border-neutral-200 p-4 flex flex-wrap gap-4 items-end">
+      <div className="bg-white rounded-2xl border border-neutral-200 p-4 space-y-3">
         <div className="flex gap-2 items-end">
           <Fecha label="Desde" value={desde} onChange={(e) => setDesde(e.target.value)} />
-          <ChevronRight size={16} className="text-neutral-300 mb-2.5" />
+          <ChevronRight size={16} className="text-neutral-300 mb-2.5 flex-shrink-0" />
           <Fecha label="Hasta" value={hasta} onChange={(e) => setHasta(e.target.value)} />
         </div>
-        <div className="flex gap-1.5 pb-0.5">
-          {FILTROS_RAPIDOS.map((f) => (
-            <button key={f.label} onClick={() => aplicarFiltroRapido(f.dias)}
-              className="text-xs uppercase tracking-[0.1em] rounded-full border border-neutral-300 px-3 py-1.5 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 transition-colors">
-              {f.label}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1.5 flex-wrap">
+            {FILTROS_RAPIDOS.map((f) => (
+              <button key={f.label} onClick={() => aplicarFiltroRapido(f.dias)}
+                className="text-xs uppercase tracking-[0.1em] rounded-full border border-neutral-300 px-3 py-1.5 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 transition-colors">
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {cargaManualHabilitada ? (
+            <button
+              onClick={() => setNuevoAbierto(true)}
+              className="w-full sm:w-auto sm:ml-auto inline-flex items-center justify-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2.5 hover:bg-neutral-800 transition-colors"
+            >
+              <Plus size={15} strokeWidth={2} /> Nuevo turno
             </button>
-          ))}
+          ) : (
+            <span
+              title="Disponible desde el plan Pro"
+              className="w-full sm:w-auto sm:ml-auto inline-flex items-center justify-center gap-1.5 rounded-full border border-neutral-200 text-neutral-400 text-xs uppercase tracking-[0.1em] px-4 py-2.5 cursor-not-allowed"
+            >
+              <Plus size={15} strokeWidth={2} /> Nuevo turno · Pro
+            </span>
+          )}
         </div>
-        {cargaManualHabilitada ? (
-          <button
-            onClick={() => setNuevoAbierto(true)}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2 hover:bg-neutral-800 transition-colors"
-          >
-            <Plus size={15} strokeWidth={2} /> Nuevo turno
-          </button>
-        ) : (
-          <span
-            title="Disponible desde el plan Pro"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-neutral-200 text-neutral-400 text-xs uppercase tracking-[0.1em] px-4 py-2 cursor-not-allowed"
-          >
-            <Plus size={15} strokeWidth={2} /> Nuevo turno · Pro
-          </span>
-        )}
       </div>
 
       {nuevoAbierto && (
@@ -929,24 +931,26 @@ function Reportes({ onError }) {
   return (
     <div className="space-y-5">
       {/* Selector de período */}
-      <div className="bg-white rounded-2xl border border-neutral-200 p-4 flex flex-wrap gap-4 items-end">
+      <div className="bg-white rounded-2xl border border-neutral-200 p-4 space-y-3">
         <div className="flex gap-2 items-end">
           <Fecha label="Desde" value={desde} onChange={(e) => setDesde(e.target.value)} />
-          <ChevronRight size={16} className="text-neutral-300 mb-2.5" />
+          <ChevronRight size={16} className="text-neutral-300 mb-2.5 flex-shrink-0" />
           <Fecha label="Hasta" value={hasta} onChange={(e) => setHasta(e.target.value)} />
         </div>
-        <div className="flex gap-1.5 pb-0.5 flex-wrap">
-          {MESES_RAPIDOS.map((m) => (
-            <button key={m.label} onClick={() => aplicarRapido(m.fn)}
-              className="text-xs uppercase tracking-[0.1em] rounded-full border border-neutral-300 px-3 py-1.5 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 transition-colors">
-              {m.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1.5 flex-wrap">
+            {MESES_RAPIDOS.map((m) => (
+              <button key={m.label} onClick={() => aplicarRapido(m.fn)}
+                className="text-xs uppercase tracking-[0.1em] rounded-full border border-neutral-300 px-3 py-1.5 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 transition-colors">
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => cargar()}
+            className="w-full sm:w-auto sm:ml-auto inline-flex items-center justify-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2.5 hover:bg-neutral-800 transition-colors">
+            <TrendingUp size={14} /> Ver reporte
+          </button>
         </div>
-        <button onClick={() => cargar()}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-neutral-900 text-white text-xs uppercase tracking-[0.1em] px-4 py-2 hover:bg-neutral-800 transition-colors">
-          <TrendingUp size={14} /> Ver reporte
-        </button>
       </div>
 
       {cargando && <Cargando />}
@@ -1193,10 +1197,10 @@ function TituloSeccion({ children }) {
 
 function Fecha({ label, ...props }) {
   return (
-    <div>
+    <div className="flex-1 min-w-0">
       <label className="block text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-1">{label}</label>
       <input type="date" {...props}
-        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 transition-colors" />
+        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:border-neutral-900 transition-colors" />
     </div>
   );
 }
