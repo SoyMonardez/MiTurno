@@ -346,7 +346,7 @@ export default function Negocio() {
   return (
     <div className="min-h-screen bg-neutral-200">
       {seoData && <SEO {...seoData} />}
-      <div className="max-w-md mx-auto min-h-screen bg-white relative">
+      <div className="max-w-md md:max-w-3xl mx-auto min-h-screen bg-white relative">
         <NegocioHeader negocio={negocio} />
 
         {/* Hoja blanca que monta sobre el header */}
@@ -590,7 +590,7 @@ function TabServicios({ servicios, categorias, seleccion, busqueda, setBusqueda,
         </div>
       )}
 
-      <div className="px-4 py-2 space-y-3 stagger">
+      <div className="px-4 py-2 space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-3 stagger">
         {visibles.map((s) => (
           <ServicioCard
             key={s.id}
@@ -1113,7 +1113,7 @@ function BarraCarrito({ servicios, total, totalDuracion, onReservar, onQuitar })
         />
       )}
 
-      <div className="max-w-md mx-auto bg-white rounded-t-3xl border-t border-neutral-200 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.18)]">
+      <div className="max-w-md md:max-w-3xl mx-auto bg-white rounded-t-3xl border-t border-neutral-200 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.18)]">
         {/* Zona de gesto: handle + tap para expandir */}
         <button
           onClick={() => setExpandido((v) => !v)}
@@ -1214,7 +1214,7 @@ function ModalReserva({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 modal-backdrop">
       <div
-        className="w-full max-w-md bg-white rounded-t-3xl flex flex-col overflow-hidden modal-sheet"
+        className="w-full max-w-md md:max-w-lg bg-white rounded-t-3xl flex flex-col overflow-hidden modal-sheet"
         style={{ height: "92dvh", maxHeight: "92dvh" }}
       >
         {/* Header modal */}
@@ -1637,7 +1637,7 @@ function FilaResumen({ label, valor }) {
 function SkeletonPage() {
   return (
     <div className="min-h-screen bg-neutral-200">
-      <div className="max-w-md mx-auto min-h-screen bg-white">
+      <div className="max-w-md md:max-w-3xl mx-auto min-h-screen bg-white">
         <div className="bg-neutral-950 px-6 pt-14 pb-10 text-center space-y-3">
           <div className="skeleton h-9 w-52 mx-auto" style={{ background: "rgba(255,255,255,0.08)" }} />
           <div className="skeleton h-3 w-32 mx-auto" style={{ background: "rgba(255,255,255,0.05)" }} />

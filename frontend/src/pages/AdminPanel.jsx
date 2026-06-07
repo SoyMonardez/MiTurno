@@ -193,7 +193,7 @@ function Dashboard({ onError }) {
         En vivo · se actualiza solo
       </div>
 
-      <div className="grid grid-cols-2 gap-3 max-w-md">
+      <div className="grid grid-cols-2 gap-3 max-w-md md:max-w-2xl">
         <Metrica titulo="Turnos hoy" valor={data.turnos_hoy} />
         <Metrica titulo="Turnos esta semana" valor={data.turnos_semana} />
       </div>
@@ -240,46 +240,46 @@ function Dashboard({ onError }) {
 
 function GraficoTrafico({ datos }) {
   const maximo = Math.max(...datos.map((d) => d.turnos), 1);
-  const ancho = 720;
-  const alto = 100;
-  const barWidth = Math.floor((ancho - 20) / datos.length) - 2;
-  const gap = Math.floor((ancho - 20) / datos.length);
+  const ultimo = datos.length - 1;
 
   return (
     <section>
       <TituloSeccion>Actividad · últimos 30 días</TituloSeccion>
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5">
-        <svg viewBox={`0 0 ${ancho} ${alto + 24}`} className="w-full" style={{ height: 140 }}>
-          {[0, 0.5, 1].map((f) => (
-            <line key={f} x1={10} y1={alto - f * alto} x2={ancho - 10} y2={alto - f * alto} stroke="#e5e5e5" strokeWidth={1} />
-          ))}
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5">
+        {/* Barras (más alto en celular para mejor lectura) */}
+        <div className="flex items-end gap-[2px] sm:gap-1 h-56 sm:h-44">
           {datos.map((d, i) => {
-            const h = Math.max(2, Math.round((d.turnos / maximo) * (alto - 8)));
-            const x = 10 + i * gap;
-            const y = alto - h;
-            const esHoy = i === datos.length - 1;
+            const esHoy = i === ultimo;
+            const pct = d.turnos > 0 ? Math.max(6, (d.turnos / maximo) * 100) : 2;
             return (
-              <g key={d.fecha}>
-                <rect x={x} y={y} width={barWidth} height={h} rx={2}
-                  fill={esHoy ? "#0a0a0a" : "#a3a3a3"} opacity={d.turnos === 0 ? 0.35 : 1} />
+              <div key={d.fecha} className="flex-1 flex flex-col justify-end items-center h-full">
                 {d.turnos > 0 && (
-                  <text x={x + barWidth / 2} y={y - 3} textAnchor="middle" fontSize={9} fill="#525252">{d.turnos}</text>
+                  <span className="text-[9px] sm:text-[10px] text-neutral-500 mb-0.5 leading-none">{d.turnos}</span>
                 )}
-              </g>
+                <div
+                  style={{ height: `${pct}%` }}
+                  title={`${d.fecha}: ${d.turnos}`}
+                  className={`w-full max-w-[16px] rounded-t-md transition-all ${
+                    esHoy ? "bg-neutral-900" : "bg-neutral-300"
+                  } ${d.turnos === 0 ? "opacity-40" : ""}`}
+                />
+              </div>
             );
           })}
+        </div>
+        {/* Etiquetas de fecha */}
+        <div className="flex gap-[2px] sm:gap-1 mt-1.5">
           {datos.map((d, i) => {
-            if (i % 7 !== 0 && i !== datos.length - 1) return null;
-            const x = 10 + i * gap + barWidth / 2;
-            const partes = d.fecha.split("-");
+            const mostrar = i % 7 === 0 || i === ultimo;
+            const [, mm, dd] = d.fecha.split("-");
             return (
-              <text key={d.fecha + "-l"} x={x} y={alto + 16} textAnchor="middle" fontSize={9} fill="#a3a3a3">
-                {`${partes[2]}/${partes[1]}`}
-              </text>
+              <div key={d.fecha + "-l"} className="flex-1 text-center text-[9px] sm:text-[10px] text-neutral-400 leading-none">
+                {mostrar ? `${dd}/${mm}` : ""}
+              </div>
             );
           })}
-        </svg>
-        <p className="text-[10px] uppercase tracking-[0.1em] text-neutral-400 mt-2 text-right">
+        </div>
+        <p className="text-[10px] uppercase tracking-[0.1em] text-neutral-400 mt-3 text-right">
           Barra negra = hoy · turnos confirmados y completados
         </p>
       </div>
