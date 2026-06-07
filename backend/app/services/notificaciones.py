@@ -245,6 +245,16 @@ def link_google_calendar(
     )
 
 
+def _texto_anticipacion(minutos: int) -> str:
+    """Texto amigable de la anticipación mínima de cancelación."""
+    if not minutos or minutos <= 0:
+        return "en cualquier momento"
+    if minutos % 60 == 0 and minutos >= 60:
+        horas = minutos // 60
+        return f"hasta {horas} hora{'s' if horas != 1 else ''} antes del turno"
+    return f"hasta {minutos} minuto{'s' if minutos != 1 else ''} antes del turno"
+
+
 def enviar_confirmacion_reserva(
     db: Session,
     reserva: Reserva,
@@ -259,6 +269,7 @@ def enviar_confirmacion_reserva(
     fecha_str = _formato_fecha(reserva.inicio, tz)
     servicios_str = ", ".join(servicios_nombres)
     enlace_cancelar = f"{settings.frontend_url}/cancelar/{reserva.token_cancelacion}"
+    anticipacion_txt = _texto_anticipacion(negocio.cancelacion_anticipacion_min)
 
     cuerpo_cliente = (
         f"Hola {cliente_nombre},\n\n"
@@ -272,6 +283,7 @@ def enviar_confirmacion_reserva(
     if negocio.direccion:
         cuerpo_cliente += f"Dirección: {negocio.direccion}\n"
     cuerpo_cliente += f"\nSi necesitás cancelar: {enlace_cancelar}\n"
+    cuerpo_cliente += f"Podés cancelar {anticipacion_txt}.\n"
 
     filas = (
         _fila("Servicios", servicios_str)
@@ -299,7 +311,7 @@ def enviar_confirmacion_reserva(
         <p style="text-align:center;margin:0 0 10px;">{_boton("Agregar al calendario", enlace_calendario)}</p>
         <p style="text-align:center;margin:0 0 14px;">{_boton_borde("Cancelar reserva", enlace_cancelar)}</p>
         <p style="text-align:center;color:#a3a3a3;font-size:11px;margin:0;">
-          Podés cancelar hasta 20 minutos antes del turno.</p>
+          Podés cancelar {anticipacion_txt}.</p>
         """,
     )
     ok = _enviar_email(
