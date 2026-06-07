@@ -92,12 +92,24 @@ def enviar_recordatorios_vencidos() -> int:
                 mensaje = "La última vez no pudiste venir. Reagendá tu turno cuando te quede cómodo."
                 boton = "Reservar turno"
 
+            # Para los recordatorios de "volvé", agregamos un enlace de baja.
+            baja_html = ""
+            if rec.tipo in (TipoRecordatorio.frecuencia, TipoRecordatorio.inasistencia) and reserva:
+                baja_url = f"{settings.frontend_url}/baja-recordatorios/{reserva.token_cancelacion}"
+                baja_html = (
+                    f'<p style="text-align:center;margin-top:18px;font-size:11px;color:#a3a3a3;">'
+                    f'¿No querés recibir más estos recordatorios? '
+                    f'<a href="{baja_url}" style="color:#a3a3a3;text-decoration:underline;">Darme de baja</a>'
+                    f'</p>'
+                )
+
             html = layout_html(
                 negocio,
                 f"""
                 {_titulo(titulo)}
                 {_parrafo(f"Hola {cliente.nombre}, {mensaje}")}
                 <p style="text-align:center;">{_boton(boton, enlace)}</p>
+                {baja_html}
                 """,
             )
             ok = _enviar_email(cliente.email, asunto, _cuerpo(rec, negocio, cliente), html)

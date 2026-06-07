@@ -723,6 +723,8 @@ def actualizar_negocio(
         negocio.logo = data.logo
     if data.icono is not None:
         negocio.icono = data.icono
+    if data.cancelacion_anticipacion_min is not None:
+        negocio.cancelacion_anticipacion_min = data.cancelacion_anticipacion_min
     if data.redes is not None:
         negocio.redes = data.redes
     if data.mapa_url is not None:

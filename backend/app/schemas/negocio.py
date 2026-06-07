@@ -12,6 +12,7 @@ class NegocioBase(BaseModel):
     email_notificaciones: str | None = None
     logo: str | None = None
     icono: str = "scissors"
+    cancelacion_anticipacion_min: int = 20
     redes: str | None = None
     mapa_url: str | None = None
 
@@ -28,6 +29,7 @@ class NegocioUpdate(BaseModel):
     email_notificaciones: str | None = None
     logo: str | None = None
     icono: str | None = None
+    cancelacion_anticipacion_min: int | None = None
     redes: str | None = None
     mapa_url: str | None = None
 

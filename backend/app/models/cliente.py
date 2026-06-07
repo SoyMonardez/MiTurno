@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -26,3 +26,5 @@ class Cliente(Base):
     primera_visita: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     ultima_visita: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     segmento: Mapped[SegmentoCliente] = mapped_column(default=SegmentoCliente.nuevo)
+    # Si el cliente aceptó recibir recordatorios de "volvé a visitarnos".
+    acepta_recordatorios: Mapped[bool] = mapped_column(Boolean, default=True)

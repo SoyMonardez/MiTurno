@@ -4,6 +4,7 @@ import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminPanel from "./pages/AdminPanel.jsx";
 import SuperAdmin from "./pages/SuperAdmin.jsx";
 import CancelarReserva from "./pages/CancelarReserva.jsx";
+import DesuscribirRecordatorios from "./pages/DesuscribirRecordatorios.jsx";
 import { getToken } from "./api/client.js";
 
 function RequireAuth({ children }) {
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/barberia-demo" replace />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/cancelar/:token" element={<CancelarReserva />} />
+        <Route path="/baja-recordatorios/:token" element={<DesuscribirRecordatorios />} />
         <Route
           path="/admin"
           element={

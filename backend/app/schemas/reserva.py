@@ -58,6 +58,15 @@ class ReservaOut(BaseModel):
     items: list[ReservaItemOut] = []
 
 
+class BajaRecordatoriosOut(BaseModel):
+    """Datos para la página de baja de recordatorios (por token)."""
+    negocio_nombre: str
+    negocio_slug: str
+    negocio_icono: str
+    cliente_nombre: str
+    ya_dado_de_baja: bool
+
+
 class ReservaPublicaOut(BaseModel):
     """Datos de una reserva para la página de cancelación (por token)."""
     estado: EstadoReserva

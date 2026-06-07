@@ -258,6 +258,10 @@ def crear_reserva(data: ReservaCreate, db: Session) -> Reserva:
         inicio,
         db,
     )
+    # Si el cliente eligió recibir recordatorios, re-activamos su consentimiento
+    # (por si se había dado de baja antes).
+    if data.frecuencia_recordatorio_dias:
+        cliente.acepta_recordatorios = True
 
     reserva = Reserva(
         negocio_id=data.negocio_id,

@@ -8,11 +8,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.core.config import settings
 from app.models.catalogo import Servicio
-from app.models.enums import EstadoReserva
+from app.models.cliente import Cliente
+from app.models.enums import EstadoRecordatorio, EstadoReserva, TipoRecordatorio
 from app.models.negocio import Negocio
+from app.models.notificacion import RecordatorioProgramado
 from app.models.profesional import Profesional
 from app.models.reserva import Reserva, ReservaItem
-from app.schemas.reserva import ReservaCreate, ReservaOut, ReservaPublicaOut
+from app.schemas.reserva import (
+    BajaRecordatoriosOut,
+    ReservaCreate,
+    ReservaOut,
+    ReservaPublicaOut,
+)
 from app.services.gestion_reservas import cancelar_por_token
 from app.services.reservas import crear_reserva
 
@@ -41,7 +48,8 @@ def datos_para_cancelar(token: str, db: Session = Depends(get_db)) -> ReservaPub
             .order_by(ReservaItem.orden)
         )
     )
-    limite = reserva.inicio - timedelta(minutes=settings.cancelacion_min_anticipacion)
+    anticipacion = negocio.cancelacion_anticipacion_min
+    limite = reserva.inicio - timedelta(minutes=anticipacion)
     cancelable = (
         reserva.estado == EstadoReserva.confirmada
         and datetime.now(ZoneInfo("UTC")) <= limite
@@ -58,7 +66,7 @@ def datos_para_cancelar(token: str, db: Session = Depends(get_db)) -> ReservaPub
         profesional_nombre=profesional.nombre if profesional else "",
         servicios=servicios,
         cancelable=cancelable,
-        minutos_anticipacion=settings.cancelacion_min_anticipacion,
+        minutos_anticipacion=anticipacion,
     )
 
 
@@ -66,3 +74,53 @@ def datos_para_cancelar(token: str, db: Session = Depends(get_db)) -> ReservaPub
 def cancelar_cliente(token: str, db: Session = Depends(get_db)) -> ReservaOut:
     db.info["current_cancelacion_token"] = token
     return cancelar_por_token(token, db)
+
+
+def _reserva_por_token(token: str, db: Session) -> Reserva:
+    db.info["current_cancelacion_token"] = token
+    reserva = db.scalar(select(Reserva).where(Reserva.token_cancelacion == token))
+    if not reserva:
+        raise HTTPException(404, "Enlace no válido")
+    return reserva
+
+
+@router.get("/recordatorios/baja/{token}", response_model=BajaRecordatoriosOut)
+def datos_baja_recordatorios(token: str, db: Session = Depends(get_db)) -> BajaRecordatoriosOut:
+    reserva = _reserva_por_token(token, db)
+    negocio = db.get(Negocio, reserva.negocio_id)
+    cliente = db.get(Cliente, reserva.cliente_id)
+    return BajaRecordatoriosOut(
+        negocio_nombre=negocio.nombre if negocio else "MiTurno",
+        negocio_slug=negocio.slug if negocio else "",
+        negocio_icono=negocio.icono if negocio else "scissors",
+        cliente_nombre=cliente.nombre if cliente else "",
+        ya_dado_de_baja=bool(cliente and not cliente.acepta_recordatorios),
+    )
+
+
+@router.post("/recordatorios/baja/{token}", response_model=BajaRecordatoriosOut)
+def baja_recordatorios(token: str, db: Session = Depends(get_db)) -> BajaRecordatoriosOut:
+    reserva = _reserva_por_token(token, db)
+    negocio = db.get(Negocio, reserva.negocio_id)
+    cliente = db.get(Cliente, reserva.cliente_id)
+    if cliente:
+        cliente.acepta_recordatorios = False
+        # Cancelar recordatorios "volvé" pendientes (frecuencia e inasistencia).
+        for rec in db.scalars(
+            select(RecordatorioProgramado).where(
+                RecordatorioProgramado.cliente_id == cliente.id,
+                RecordatorioProgramado.estado == EstadoRecordatorio.pendiente,
+                RecordatorioProgramado.tipo.in_(
+                    [TipoRecordatorio.frecuencia, TipoRecordatorio.inasistencia]
+                ),
+            )
+        ):
+            rec.estado = EstadoRecordatorio.cancelado
+        db.commit()
+    return BajaRecordatoriosOut(
+        negocio_nombre=negocio.nombre if negocio else "MiTurno",
+        negocio_slug=negocio.slug if negocio else "",
+        negocio_icono=negocio.icono if negocio else "scissors",
+        cliente_nombre=cliente.nombre if cliente else "",
+        ya_dado_de_baja=True,
+    )

@@ -328,9 +328,15 @@ function ConfigNegocio({ onError }) {
   const [guardando, setGuardando] = useState(false);
   const [ok, setOk] = useState(false);
   const [generandoDesc, setGenerandoDesc] = useState(false);
+  const [antUnidad, setAntUnidad] = useState("min");
 
   useEffect(() => {
-    apiGet("/negocios/mi-negocio").then(setForm).catch(onError);
+    apiGet("/negocios/mi-negocio").then((n) => {
+      setForm(n);
+      // Mostrar en horas si el valor es múltiplo exacto de 60 (y >= 60).
+      const m = n.cancelacion_anticipacion_min ?? 20;
+      if (m >= 60 && m % 60 === 0) setAntUnidad("hora");
+    }).catch(onError);
   }, [onError]);
 
   async function generarDescripcionConIA() {
@@ -368,6 +374,7 @@ function ConfigNegocio({ onError }) {
         email_notificaciones: form.email_notificaciones || null,
         logo: form.logo || null,
         icono: form.icono || "scissors",
+        cancelacion_anticipacion_min: form.cancelacion_anticipacion_min ?? 20,
         redes: form.redes || null,
         mapa_url: form.mapa_url || null,
       });
@@ -473,6 +480,34 @@ function ConfigNegocio({ onError }) {
             <Etiqueta label="Redes / sitio web" />
             <input value={form.redes || ""} onChange={set("redes")} className="campo-admin" placeholder="@instagram o https://..." />
           </div>
+        </div>
+
+        {/* Anticipación de cancelación */}
+        <div>
+          <Etiqueta icono={<Clock size={12} />} label="Hasta cuándo puede cancelar el cliente" />
+          <div className="flex items-center gap-2">
+            <input
+              type="number" min="0"
+              value={antUnidad === "hora" ? Math.round((form.cancelacion_anticipacion_min ?? 20) / 60) : (form.cancelacion_anticipacion_min ?? 20)}
+              onChange={(e) => {
+                const num = Math.max(0, parseInt(e.target.value || "0", 10));
+                setForm({ ...form, cancelacion_anticipacion_min: antUnidad === "hora" ? num * 60 : num });
+              }}
+              className="campo-admin w-28"
+            />
+            <select
+              value={antUnidad}
+              onChange={(e) => setAntUnidad(e.target.value)}
+              className="campo-admin w-32"
+            >
+              <option value="min">minutos</option>
+              <option value="hora">horas</option>
+            </select>
+            <span className="text-sm text-neutral-400">antes del turno</span>
+          </div>
+          <p className="text-xs text-neutral-400 mt-1.5">
+            El cliente solo podrá cancelar online hasta ese tiempo antes de su turno. Después tendrá que llamarte.
+          </p>
         </div>
 
         <div className="flex items-center gap-3 pt-1">

@@ -30,11 +30,13 @@ def cancelar_por_token(token: str, db: Session) -> Reserva:
     if reserva.estado != EstadoReserva.confirmada:
         raise HTTPException(409, "La reserva no se puede cancelar en su estado actual")
 
-    limite = reserva.inicio - timedelta(minutes=settings.cancelacion_min_anticipacion)
+    negocio = db.get(Negocio, reserva.negocio_id)
+    anticipacion = negocio.cancelacion_anticipacion_min if negocio else settings.cancelacion_min_anticipacion
+    limite = reserva.inicio - timedelta(minutes=anticipacion)
     if datetime.now(ZoneInfo("UTC")) > limite:
         raise HTTPException(
             409,
-            f"Solo se puede cancelar hasta {settings.cancelacion_min_anticipacion} minutos antes",
+            f"Solo se puede cancelar hasta {anticipacion} minutos antes",
         )
     return _aplicar_cancelacion(reserva, db, cuenta_como_falla=True)
 

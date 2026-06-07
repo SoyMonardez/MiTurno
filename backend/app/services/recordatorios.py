@@ -4,9 +4,15 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.models.cliente import Cliente
 from app.models.enums import EstadoRecordatorio, TipoRecordatorio
 from app.models.notificacion import RecordatorioProgramado
 from app.models.reserva import Reserva
+
+
+def _acepta_recordatorios(cliente_id: int, db: Session) -> bool:
+    cliente = db.get(Cliente, cliente_id)
+    return bool(cliente and cliente.acepta_recordatorios)
 
 # Días tras una inasistencia para sugerir reagendar.
 DIAS_SUGERENCIA_INASISTENCIA = 1
@@ -33,6 +39,8 @@ def programar_recordatorio_turno(reserva: Reserva, db: Session) -> None:
 def programar_por_frecuencia(reserva: Reserva, db: Session) -> None:
     if not reserva.frecuencia_recordatorio_dias:
         return
+    if not _acepta_recordatorios(reserva.cliente_id, db):
+        return
     enviar_en = reserva.inicio + timedelta(days=reserva.frecuencia_recordatorio_dias)
     db.add(
         RecordatorioProgramado(
@@ -45,6 +53,8 @@ def programar_por_frecuencia(reserva: Reserva, db: Session) -> None:
 
 
 def programar_por_inasistencia(reserva: Reserva, db: Session) -> None:
+    if not _acepta_recordatorios(reserva.cliente_id, db):
+        return
     enviar_en = reserva.inicio + timedelta(days=DIAS_SUGERENCIA_INASISTENCIA)
     db.add(
         RecordatorioProgramado(

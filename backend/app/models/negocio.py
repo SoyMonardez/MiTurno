@@ -20,6 +20,8 @@ class Negocio(Base):
     logo: Mapped[str | None] = mapped_column(String(500), default=None)
     icono: Mapped[str] = mapped_column(String(40), default="scissors")
     plan: Mapped[str] = mapped_column(String(20), default="pro")
+    # Minutos de anticipación mínima para que el cliente pueda cancelar online.
+    cancelacion_anticipacion_min: Mapped[int] = mapped_column(default=20)
     redes: Mapped[str | None] = mapped_column(String(1000), default=None)
     mapa_url: Mapped[str | None] = mapped_column(String(1000), default=None)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
