@@ -299,7 +299,7 @@ const ESTADO_CONFIG = {
   confirmada: { label: "Confirmado", dot: "bg-neutral-900" },
   completada: { label: "Completado", dot: "bg-green-600" },
   cancelada:  { label: "Cancelado",  dot: "bg-neutral-300" },
-  no_show:    { label: "No asistió", dot: "bg-red-500" },
+  no_show:    { label: "Ausente", dot: "bg-red-500" },
 };
 
 function Turnos({ onError }) {
@@ -399,12 +399,12 @@ function Turnos({ onError }) {
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {Object.entries(ESTADO_CONFIG).map(([key, cfg]) => (
             <button key={key} onClick={() => setFiltroEstado(filtroEstado === key ? "" : key)}
-              className={`rounded-2xl border p-3 text-left transition-all ${
+              className={`rounded-2xl border p-2.5 sm:p-3 text-left transition-all ${
                 filtroEstado === key ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white hover:border-neutral-400"
               }`}>
               <span className={`inline-block h-2 w-2 rounded-full mb-2 ${filtroEstado === key ? "bg-white" : cfg.dot}`} />
               <div className={`font-serif text-2xl ${filtroEstado === key ? "text-white" : "text-neutral-900"}`}>{contadores[key]}</div>
-              <div className={`text-[10px] uppercase tracking-[0.1em] ${filtroEstado === key ? "text-white/70" : "text-neutral-400"}`}>{cfg.label}</div>
+              <div className={`text-[9px] sm:text-[10px] uppercase tracking-[0.06em] sm:tracking-[0.1em] leading-tight truncate ${filtroEstado === key ? "text-white/70" : "text-neutral-400"}`}>{cfg.label}</div>
             </button>
           ))}
         </div>
