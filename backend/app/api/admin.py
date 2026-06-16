@@ -20,7 +20,12 @@ from app.models.reserva import Reserva, ReservaItem
 from app.schemas.admin import (
     AccesoOut,
     AsistenciaIn,
+    BotRespuestaIAIn,
+    BotRespuestaIAOut,
+    BotRespuestas,
+    BotRespuestasOut,
     ClienteAdminOut,
+    WhatsAppEstadoOut,
     ClienteFrecuenteOut,
     DashboardOut,
     EstadisticaDiaOut,
@@ -36,7 +41,7 @@ from app.schemas.admin import (
     SugerenciaCategoriasOut,
 )
 from app.schemas.reserva import ReservaAdminCreate, ReservaOut
-from app.schemas.negocio import NegocioUpdate, NegocioOut
+from app.schemas.negocio import NegocioAdminOut, NegocioUpdate
 from app.services.gestion_reservas import cancelar_por_admin, marcar_asistencia
 from app.services.reservas import crear_reserva_admin
 
@@ -180,6 +185,9 @@ def _serializar_reservas(reservas, db: Session) -> list[ReservaAdminOut]:
                 cliente_telefono=cliente.telefono if cliente else None,
                 profesional_nombre=profesional.nombre if profesional else "—",
                 servicios=servicios_por_reserva.get(r.id, []),
+                metodo_pago=r.metodo_pago,
+                pago_profesional=r.pago_profesional,
+                pago_local=r.pago_local,
             )
         )
     return salida
@@ -650,7 +658,7 @@ def asistencia(
     admin: Usuario = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> ReservaOut:
-    return marcar_asistencia(reserva_id, admin.negocio_id, data.estado, db)
+    return marcar_asistencia(reserva_id, admin.negocio_id, data.estado, db, data.metodo_pago)
 
 
 @router.delete("/resenas/{resena_id}", status_code=204)
@@ -686,7 +694,7 @@ def listar_clientes(
     return list(db.scalars(consulta.order_by(Cliente.nombre)))
 
 
-@router.get("/negocio", response_model=NegocioOut)
+@router.get("/negocio", response_model=NegocioAdminOut)
 def obtener_negocio(
     admin: Usuario = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -698,7 +706,7 @@ def obtener_negocio(
     return negocio
 
 
-@router.patch("/negocio", response_model=NegocioOut)
+@router.patch("/negocio", response_model=NegocioAdminOut)
 def actualizar_negocio(
     data: NegocioUpdate,
     admin: Usuario = Depends(get_current_admin),
@@ -731,6 +739,8 @@ def actualizar_negocio(
         negocio.redes = data.redes
     if data.mapa_url is not None:
         negocio.mapa_url = data.mapa_url
+    if data.whatsapp_instancia is not None:
+        negocio.whatsapp_instancia = data.whatsapp_instancia.strip() or None
 
     db.commit()
     db.refresh(negocio)
@@ -790,3 +800,251 @@ def sugerir_categorias(
             vistas.add(c.lower())
             categorias_limpias.append(c)
     return SugerenciaCategoriasOut(categorias=categorias_limpias[:6])
+
+
+# ── Respuestas personalizadas del bot de WhatsApp (Premium) ──────────────────
+
+
+def _gate_premium_bot(
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    negocio = db.get(Negocio, admin.negocio_id)
+    requiere_plan(negocio.plan if negocio else None, "premium", "El bot de WhatsApp")
+    return admin
+
+
+def _auto_bot_respuestas(negocio: Negocio, db: Session) -> BotRespuestas:
+    """Las respuestas que el bot generaría automáticamente (para previsualizar)."""
+    from app.services.bot_whatsapp import (
+        _auto_direccion,
+        _auto_reservar,
+        _link_reservas,
+        _texto_horarios,
+        _texto_precios,
+    )
+
+    return BotRespuestas(
+        bienvenida=(
+            f"¡Gracias por escribirnos! Para reservar un turno entrá en "
+            f"{_link_reservas(negocio)} o escribinos 'precios' u 'horarios'."
+        ),
+        precios=_texto_precios(negocio, db),
+        horarios=_texto_horarios(negocio, db),
+        direccion=_auto_direccion(negocio),
+        reservar=_auto_reservar(negocio),
+    )
+
+
+@router.get("/bot-respuestas", response_model=BotRespuestasOut)
+def obtener_bot_respuestas(
+    admin: Usuario = Depends(_gate_premium_bot),
+    db: Session = Depends(get_db),
+) -> BotRespuestasOut:
+    import json
+
+    negocio = db.get(Negocio, admin.negocio_id)
+    data = {}
+    if negocio and negocio.bot_respuestas:
+        try:
+            data = json.loads(negocio.bot_respuestas)
+        except (ValueError, TypeError):
+            data = {}
+    return BotRespuestasOut(
+        respuestas=BotRespuestas(**{k: (data.get(k) or "") for k in BotRespuestas.model_fields}),
+        automaticas=_auto_bot_respuestas(negocio, db),
+    )
+
+
+@router.patch("/bot-respuestas", response_model=BotRespuestasOut)
+def guardar_bot_respuestas(
+    data: BotRespuestas,
+    admin: Usuario = Depends(_gate_premium_bot),
+    db: Session = Depends(get_db),
+) -> BotRespuestasOut:
+    import json
+
+    negocio = db.get(Negocio, admin.negocio_id)
+    # Guardamos solo las claves con texto (las vacías usan la respuesta automática).
+    limpio = {k: v.strip() for k, v in data.model_dump().items() if v and v.strip()}
+    negocio.bot_respuestas = json.dumps(limpio, ensure_ascii=False) if limpio else None
+    db.commit()
+    db.refresh(negocio)
+    return obtener_bot_respuestas(admin, db)
+
+
+_PROMPTS_BOT_IA = {
+    "bienvenida": (
+        "Escribí un mensaje de bienvenida cálido y breve (máximo 2 oraciones) para el "
+        "WhatsApp de '{nombre}', que agradezca el contacto e invite a reservar un turno."
+    ),
+    "reservar": (
+        "Escribí un mensaje breve y entusiasta (1-2 oraciones) que invite al cliente de "
+        "'{nombre}' a reservar su turno. Terminá con el texto exacto: {link}"
+    ),
+    "precios": (
+        "Escribí una sola oración corta para presentar la lista de precios de '{nombre}' "
+        "por WhatsApp. Terminá con el texto exacto: {precios}"
+    ),
+    "horarios": (
+        "Escribí una sola oración corta para presentar los horarios de atención de "
+        "'{nombre}' por WhatsApp. Terminá con el texto exacto: {horarios}"
+    ),
+    "direccion": (
+        "Escribí una sola oración amable indicando cómo ubicar a '{nombre}'. "
+        "Si hay dirección, mencionala: {direccion}"
+    ),
+}
+
+
+@router.post("/ia/bot-respuesta", response_model=BotRespuestaIAOut)
+def ia_bot_respuesta(
+    data: BotRespuestaIAIn,
+    admin: Usuario = Depends(_gate_premium_bot),
+    db: Session = Depends(get_db),
+) -> BotRespuestaIAOut:
+    """Sugiere con IA el texto de una respuesta del bot para una clave dada."""
+    clave = (data.clave or "").strip().lower()
+    if clave not in _PROMPTS_BOT_IA:
+        raise HTTPException(400, "Clave de respuesta inválida")
+
+    negocio = db.get(Negocio, admin.negocio_id)
+    plantilla = _PROMPTS_BOT_IA[clave]
+    # Damos contexto real a la IA, pero dejamos los placeholders {link}/{precios}/etc.
+    # intactos para que el bot los reemplace al responder.
+    prompt = plantilla.replace("{nombre}", negocio.nombre if negocio else "el negocio")
+    prompt += (
+        " Respondé SOLO con el mensaje, sin comillas ni texto extra. "
+        "No reemplaces los textos entre llaves {} si los hubiera: dejalos tal cual."
+    )
+    texto = _ia_texto(prompt, max_tokens=160)
+    if not texto:
+        # Fallback sin IA: devolvemos la automática como punto de partida.
+        texto = getattr(_auto_bot_respuestas(negocio, db), clave, "")
+    return BotRespuestaIAOut(texto=texto.strip().strip('"').strip())
+
+
+# ── Conexión de WhatsApp del negocio (Premium) ───────────────────────────────
+
+
+def _instancia_negocio(negocio: Negocio) -> str:
+    """Nombre de la instancia de Evolution para este negocio."""
+    return negocio.whatsapp_instancia or f"miturno-neg-{negocio.id}"
+
+
+@router.get("/whatsapp/estado", response_model=WhatsAppEstadoOut)
+def whatsapp_estado(
+    admin: Usuario = Depends(_gate_premium_bot),
+    db: Session = Depends(get_db),
+) -> WhatsAppEstadoOut:
+    from app.services import evolution
+
+    negocio = db.get(Negocio, admin.negocio_id)
+    if not evolution.disponible():
+        return WhatsAppEstadoOut(estado="no_disponible")
+    nombre = negocio.whatsapp_instancia
+    if not nombre:
+        return WhatsAppEstadoOut(estado="sin_instancia")
+    st = evolution.estado(nombre)
+    qr = evolution.obtener_qr(nombre) if st in ("connecting", "close") else None
+    return WhatsAppEstadoOut(instancia=nombre, estado=st, qr=qr, conectado=st == "open")
+
+
+@router.post("/whatsapp/conectar", response_model=WhatsAppEstadoOut)
+def whatsapp_conectar(
+    admin: Usuario = Depends(_gate_premium_bot),
+    db: Session = Depends(get_db),
+) -> WhatsAppEstadoOut:
+    """Crea/asegura la instancia del negocio y devuelve el QR para escanear."""
+    from app.services import evolution
+
+    negocio = db.get(Negocio, admin.negocio_id)
+    if not evolution.disponible():
+        return WhatsAppEstadoOut(estado="no_disponible")
+
+    nombre = _instancia_negocio(negocio)
+    evolution.asegurar_instancia(nombre)
+    if negocio.whatsapp_instancia != nombre:
+        negocio.whatsapp_instancia = nombre
+        db.commit()
+
+    st = evolution.estado(nombre)
+    qr = evolution.obtener_qr(nombre) if st != "open" else None
+    return WhatsAppEstadoOut(instancia=nombre, estado=st, qr=qr, conectado=st == "open")
+
+
+@router.post("/whatsapp/desconectar", response_model=WhatsAppEstadoOut)
+def whatsapp_desconectar(
+    admin: Usuario = Depends(_gate_premium_bot),
+    db: Session = Depends(get_db),
+) -> WhatsAppEstadoOut:
+    from app.services import evolution
+
+    negocio = db.get(Negocio, admin.negocio_id)
+    nombre = negocio.whatsapp_instancia
+    if nombre and evolution.disponible():
+        evolution.desconectar(nombre)
+    return WhatsAppEstadoOut(instancia=nombre, estado="close", conectado=False)
+
+
+# ── IA para el historial del cliente (todos los planes) ──────────────────────
+
+
+@router.post("/ia/nota-historial", response_model=SugerenciaTextoOut)
+def ia_mejorar_nota_historial(
+    data: TextoIn,
+    admin: Usuario = Depends(get_current_admin),
+) -> SugerenciaTextoOut:
+    """Reescribe una nota de seguimiento de forma clara y profesional."""
+    texto = (data.texto or "").strip()
+    if not texto:
+        return SugerenciaTextoOut(texto="")
+    prompt = (
+        "Reescribí esta nota de seguimiento de un cliente de un negocio de servicios "
+        "de forma clara, profesional y concisa (español rioplatense, máximo 40 palabras, "
+        "sin inventar datos que no estén en la nota). "
+        f"Nota original: \"{texto}\". Respondé SOLO con la nota mejorada, sin comillas."
+    )
+    out = _ia_texto(prompt, max_tokens=120)
+    return SugerenciaTextoOut(texto=(out or texto).strip().strip('"').strip())
+
+
+@router.post("/clientes/{cliente_id}/historial/resumen", response_model=SugerenciaTextoOut)
+def ia_resumen_historial(
+    cliente_id: int,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> SugerenciaTextoOut:
+    """Genera un resumen del historial del cliente para leer antes de atenderlo."""
+    from app.models.premium import ClienteHistorial
+
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente or cliente.negocio_id != admin.negocio_id:
+        raise HTTPException(404, "Cliente no encontrado")
+    notas = list(
+        db.scalars(
+            select(ClienteHistorial)
+            .where(
+                ClienteHistorial.negocio_id == admin.negocio_id,
+                ClienteHistorial.cliente_id == cliente_id,
+            )
+            .order_by(ClienteHistorial.fecha_actualizacion.desc())
+            .limit(20)
+        )
+    )
+    if not notas:
+        return SugerenciaTextoOut(texto="Este cliente todavía no tiene notas en su historial.")
+    detalle = "\n".join(
+        f"- {n.fecha_actualizacion:%d/%m/%Y}: {n.notas_estilo}" for n in notas
+    )
+    prompt = (
+        "Resumí el historial de un cliente para que el profesional lo lea en segundos "
+        "antes de atenderlo. Destacá lo más reciente y lo importante (preferencias, "
+        "tratamientos, observaciones, qué se hizo la última vez). Máximo 4 oraciones, "
+        f"español rioplatense, sin inventar. Historial:\n{detalle}\n\n"
+        "Respondé SOLO con el resumen."
+    )
+    out = _ia_texto(prompt, max_tokens=220)
+    if not out:
+        out = f"Última nota ({notas[0].fecha_actualizacion:%d/%m/%Y}): {notas[0].notas_estilo}"
+    return SugerenciaTextoOut(texto=out.strip().strip('"').strip())

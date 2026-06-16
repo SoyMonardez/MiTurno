@@ -388,6 +388,7 @@ function ConfigNegocio({ onError }) {
         cancelacion_anticipacion_min: form.cancelacion_anticipacion_min ?? 20,
         redes: form.redes || null,
         mapa_url: form.mapa_url || null,
+        recordatorios_canal: form.recordatorios_canal || "email",
       });
       setForm(res);
       setOk(true);
@@ -493,6 +494,7 @@ function ConfigNegocio({ onError }) {
           </div>
         </div>
 
+
         {/* Anticipación de cancelación */}
         <div>
           <Etiqueta icono={<Clock size={12} />} label="Hasta cuándo puede cancelar el cliente" />
@@ -521,6 +523,27 @@ function ConfigNegocio({ onError }) {
           </p>
         </div>
 
+        {/* Canal de recordatorios automáticos */}
+        <div>
+          <Etiqueta icono={<Send size={12} />} label="Recordatorios automáticos: ¿cómo se envían?" />
+          <select
+            value={form.recordatorios_canal || "email"}
+            onChange={set("recordatorios_canal")}
+            className="campo-admin w-full sm:w-72"
+          >
+            <option value="email">Solo por email</option>
+            {form.plan === "premium" && <option value="whatsapp">Solo por WhatsApp</option>}
+            {form.plan === "premium" && <option value="ambos">Email y WhatsApp</option>}
+          </select>
+          <p className="text-xs text-neutral-400 mt-1.5">
+            Recordatorio del turno (24 h antes), "volvé a visitarnos" y recuperación de
+            inasistencias.{" "}
+            {form.plan === "premium"
+              ? "Por WhatsApp requiere tenerlo conectado más arriba."
+              : "El envío por WhatsApp está disponible en el plan Premium."}
+          </p>
+        </div>
+
         <div className="flex items-center gap-3 pt-1">
           <button type="submit" disabled={guardando}
             className="flex items-center gap-2 rounded-full bg-neutral-900 text-white px-6 py-2.5 text-xs uppercase tracking-[0.1em] font-medium hover:bg-neutral-800 disabled:opacity-50 transition-colors">
@@ -535,6 +558,10 @@ function ConfigNegocio({ onError }) {
         </div>
       </form>
     </div>
+
+    {form.plan === "premium" && <ConectarWhatsApp onError={onError} />}
+
+    {form.plan === "premium" && <BotRespuestas onError={onError} />}
 
     {/* Cartel con QR de la sucursal */}
     <div className="rounded-2xl border border-neutral-200 bg-white p-6">
@@ -1115,9 +1142,18 @@ function Profesionales({ negocioId, onError }) {
   const [mostrarForm, setMostrarForm] = useState(false);
 
   const cargar = useCallback(() => {
-    apiGet(`/negocios/${negocioId}/profesionales`).then(setProfesionales).catch(onError);
     apiGet(`/negocios/${negocioId}/servicios`).then(setServicios).catch(onError);
-    apiGet("/admin/negocio").then((n) => setPlan(n.plan || "pro")).catch(() => {});
+    apiGet("/admin/negocio")
+      .then((n) => {
+        const planActual = n.plan || "pro";
+        setPlan(planActual);
+        // En Premium usamos el listado del admin (incluye comisión y acceso).
+        const ruta = planActual === "premium"
+          ? "/admin/profesionales"
+          : `/negocios/${negocioId}/profesionales`;
+        return apiGet(ruta).then(setProfesionales);
+      })
+      .catch(onError);
   }, [negocioId, onError]);
   useEffect(() => cargar(), [cargar]);
 
@@ -1243,7 +1279,7 @@ function Profesionales({ negocioId, onError }) {
       ) : (
         <div className="space-y-2">
           {profesionales.map((p) => (
-            <ProfesionalRow key={p.id} profesional={p} servicios={servicios} onError={onError} onSaved={cargar} />
+            <ProfesionalRow key={p.id} profesional={p} servicios={servicios} plan={plan} onError={onError} onSaved={cargar} />
           ))}
         </div>
       )}
@@ -1251,7 +1287,7 @@ function Profesionales({ negocioId, onError }) {
   );
 }
 
-function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
+function ProfesionalRow({ profesional, servicios, plan, onError, onSaved }) {
   const dialog = useDialog();
   const [ids, setIds] = useState(profesional.servicio_ids);
   const [guardando, setGuardando] = useState(false);
@@ -1392,6 +1428,10 @@ function ProfesionalRow({ profesional, servicios, onError, onSaved }) {
               </button>
             ))}
           </div>
+
+          {plan === "premium" && (
+            <PremiumProfesional profesional={profesional} onError={onError} onSaved={onSaved} />
+          )}
         </>
       )}
 
@@ -1925,6 +1965,420 @@ function Cargando() {
   return (
     <div className="flex items-center gap-2 py-6 text-neutral-400 text-sm">
       <Loader2 size={14} className="animate-spin" /> Cargando…
+    </div>
+  );
+}
+
+// ─── Premium: comisión y acceso individual del profesional ───────────────────
+
+function PremiumProfesional({ profesional, onError, onSaved }) {
+  const dialog = useDialog();
+  const [comision, setComision] = useState({
+    tipo_comision: profesional.tipo_comision || "porcentaje_corte",
+    valor_comision: profesional.valor_comision ?? 0,
+  });
+  const [guardando, setGuardando] = useState(false);
+  const [accesoAbierto, setAccesoAbierto] = useState(false);
+  const [acceso, setAcceso] = useState({ username: profesional.username || "", dni: "", password: "" });
+
+  const esPorcentaje = comision.tipo_comision === "porcentaje_corte";
+  const comisionCambiada =
+    comision.tipo_comision !== (profesional.tipo_comision || "porcentaje_corte") ||
+    Number(comision.valor_comision) !== Number(profesional.valor_comision ?? 0);
+
+  async function guardarComision() {
+    setGuardando(true);
+    try {
+      await apiPatch(`/profesionales/${profesional.id}/comision`, {
+        tipo_comision: comision.tipo_comision,
+        valor_comision: Number(comision.valor_comision) || 0,
+      });
+      onSaved();
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function guardarAcceso(e) {
+    e.preventDefault();
+    setGuardando(true);
+    try {
+      await apiPost(`/profesionales/${profesional.id}/credenciales`, {
+        username: acceso.username.trim(),
+        dni: acceso.dni.trim(),
+        password: acceso.password.trim(),
+      });
+      setAccesoAbierto(false);
+      setAcceso({ ...acceso, dni: "", password: "" });
+      await dialog.alert(
+        `Listo: ${profesional.nombre} ya puede entrar desde la pantalla de login con su usuario y verá solo sus turnos y comisiones.`,
+        "Acceso creado"
+      );
+      onSaved();
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function revocarAcceso() {
+    if (!await dialog.confirm(`¿Desactivar el acceso de ${profesional.nombre} a su panel?`)) return;
+    try {
+      await apiDelete(`/profesionales/${profesional.id}/credenciales`);
+      onSaved();
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-dashed border-neutral-200 space-y-3">
+      {/* Comisión */}
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-2">
+          Comisión (Premium)
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1.5">
+            {[
+              { id: "porcentaje_corte", label: "% por corte" },
+              { id: "fijo_local", label: "Fijo del local" },
+            ].map((t) => (
+              <button key={t.id} type="button"
+                onClick={() => setComision({ ...comision, tipo_comision: t.id })}
+                className={`text-xs rounded-full border px-3 py-1.5 transition-colors ${
+                  comision.tipo_comision === t.id
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-300 text-neutral-600 hover:border-neutral-500"
+                }`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {esPorcentaje && (
+            <div className="flex items-center gap-1">
+              <input
+                type="number" min="0" max="100" step="0.5"
+                value={comision.valor_comision}
+                onChange={(e) => setComision({ ...comision, valor_comision: e.target.value })}
+                className="w-20 rounded-xl border border-neutral-200 px-2.5 py-1.5 text-sm"
+              />
+              <span className="text-sm text-neutral-500">%</span>
+            </div>
+          )}
+          {comisionCambiada && (
+            <button onClick={guardarComision} disabled={guardando}
+              className="text-xs rounded-full bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-1.5 uppercase tracking-[0.1em] font-medium disabled:opacity-50 transition-colors">
+              {guardando ? "Guardando…" : "Guardar"}
+            </button>
+          )}
+        </div>
+        {!esPorcentaje && (
+          <p className="text-[11px] text-neutral-400 mt-1.5">
+            El local retiene el total de los cortes; el profesional se liquida por sueldo fijo aparte.
+          </p>
+        )}
+      </div>
+
+      {/* Acceso individual */}
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-2">
+          Acceso a su panel (Premium)
+        </p>
+        {!accesoAbierto ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {profesional.username ? (
+              <>
+                <span className="text-xs rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5">
+                  Usuario: <span className="font-medium">{profesional.username}</span>
+                </span>
+                <button onClick={() => setAccesoAbierto(true)}
+                  className="text-xs text-neutral-500 hover:text-neutral-900 underline underline-offset-2">
+                  Cambiar credenciales
+                </button>
+                <button onClick={revocarAcceso}
+                  className="text-xs text-red-500 hover:text-red-700 underline underline-offset-2">
+                  Desactivar
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setAccesoAbierto(true)}
+                className="text-xs rounded-full border border-neutral-300 px-3.5 py-1.5 text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 transition-colors">
+                Crear acceso individual
+              </button>
+            )}
+          </div>
+        ) : (
+          <form onSubmit={guardarAcceso} className="grid sm:grid-cols-[1fr_1fr_1fr_auto_auto] gap-2 items-center">
+            <input
+              value={acceso.username}
+              onChange={(e) => setAcceso({ ...acceso, username: e.target.value })}
+              placeholder="Usuario" required minLength={3}
+              className="rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+            />
+            <input
+              value={acceso.dni}
+              onChange={(e) => setAcceso({ ...acceso, dni: e.target.value })}
+              placeholder="DNI" required inputMode="numeric"
+              className="rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+            />
+            <input
+              type="password"
+              value={acceso.password}
+              onChange={(e) => setAcceso({ ...acceso, password: e.target.value })}
+              placeholder="Contraseña (mín. 6)" required minLength={6}
+              className="rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+            />
+            <button type="submit" disabled={guardando}
+              className="text-xs rounded-full bg-neutral-900 text-white px-4 py-2 uppercase tracking-[0.1em] disabled:opacity-50 hover:bg-neutral-800 transition-colors">
+              {guardando ? "…" : "Guardar"}
+            </button>
+            <button type="button" onClick={() => setAccesoAbierto(false)}
+              className="text-xs text-neutral-400 hover:text-neutral-700 px-2 py-2">
+              Cancelar
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Bot de WhatsApp: respuestas personalizables (Premium) ───────────────────
+
+const CAMPOS_BOT = [
+  { clave: "bienvenida", label: "Bienvenida / cuando no entiende", ayuda: "Se usa al saludar o si el bot no entiende la consulta." },
+  { clave: "precios", label: "Precios", ayuda: "Respuesta cuando preguntan por precios. Usá {precios} para insertar la lista real." },
+  { clave: "horarios", label: "Horarios", ayuda: "Cuando preguntan por horarios. Usá {horarios} para los horarios reales." },
+  { clave: "direccion", label: "Dirección / cómo llegar", ayuda: "Cuando preguntan dónde están. Usá {direccion} y {mapa}." },
+  { clave: "reservar", label: "Reservar turno", ayuda: "Cuando quieren agendar. Usá {link} para el enlace de reservas." },
+];
+
+function BotRespuestas({ onError }) {
+  const dialog = useDialog();
+  const [data, setData] = useState(null);      // {respuestas, automaticas}
+  const [form, setForm] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [generando, setGenerando] = useState(null); // clave en curso
+  const [ok, setOk] = useState(false);
+
+  useEffect(() => {
+    apiGet("/admin/bot-respuestas")
+      .then((d) => { setData(d); setForm(d.respuestas); })
+      .catch(onError);
+  }, [onError]);
+
+  async function generar(clave) {
+    setGenerando(clave);
+    try {
+      const r = await apiPost("/admin/ia/bot-respuesta", { clave });
+      setForm((f) => ({ ...f, [clave]: r.texto }));
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setGenerando(null);
+    }
+  }
+
+  async function guardar() {
+    setGuardando(true);
+    setOk(false);
+    try {
+      const d = await apiPatch("/admin/bot-respuestas", form);
+      setData(d);
+      setForm(d.respuestas);
+      setOk(true);
+      setTimeout(() => setOk(false), 2500);
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (!form) return null;
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-6 max-w-2xl">
+      <div className="flex items-center gap-2 mb-1">
+        <Bot size={16} className="text-neutral-700" strokeWidth={1.5} />
+        <h3 className="font-serif text-lg text-neutral-900">Respuestas del bot de WhatsApp</h3>
+      </div>
+      <p className="text-xs text-neutral-400 mb-5">
+        Personalizá lo que responde el bot a las consultas comunes. Si dejás un campo
+        vacío, usa la respuesta automática con tus datos reales. Podés generarlas con IA.
+      </p>
+
+      <div className="space-y-5">
+        {CAMPOS_BOT.map(({ clave, label, ayuda }) => (
+          <div key={clave}>
+            <div className="flex items-center justify-between mb-1.5">
+              <Etiqueta label={label} sinMargen />
+              <button
+                type="button"
+                onClick={() => generar(clave)}
+                disabled={generando === clave}
+                className="flex items-center gap-1 text-xs bg-neutral-100 border border-neutral-200 text-neutral-900 rounded-full px-3 py-1 font-medium hover:bg-neutral-200 active:scale-95 transition-all shadow-sm disabled:opacity-40 disabled:pointer-events-none"
+              >
+                {generando === clave ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} className="text-neutral-500" />}
+                {generando === clave ? "Generando…" : "Generar con IA"}
+              </button>
+            </div>
+            <textarea
+              value={form[clave] ?? ""}
+              onChange={(e) => setForm({ ...form, [clave]: e.target.value })}
+              rows={2}
+              placeholder={data?.automaticas?.[clave] || "Respuesta automática"}
+              className="campo-admin resize-none w-full text-sm"
+            />
+            <p className="text-[11px] text-neutral-400 mt-1">{ayuda}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 mt-6">
+        <button
+          onClick={guardar}
+          disabled={guardando}
+          className="flex items-center gap-2 rounded-full bg-neutral-900 text-white px-6 py-2.5 text-xs uppercase tracking-[0.1em] font-medium hover:bg-neutral-800 disabled:opacity-50 transition-colors"
+        >
+          {guardando ? <Loader2 size={14} className="animate-spin" /> : null}
+          {guardando ? "Guardando" : "Guardar respuestas"}
+        </button>
+        {ok && (
+          <span className="flex items-center gap-1.5 text-xs text-green-600">
+            <Check size={14} strokeWidth={2} /> Guardado
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Conectar WhatsApp del negocio (Premium) ─────────────────────────────────
+
+function ConectarWhatsApp({ onError }) {
+  const dialog = useDialog();
+  const [estado, setEstado] = useState(null);   // {estado, qr, conectado, instancia}
+  const [cargando, setCargando] = useState(false);
+  const pollRef = useRef(null);
+
+  const cargarEstado = useCallback(async () => {
+    try {
+      const e = await apiGet("/admin/whatsapp/estado");
+      setEstado(e);
+      return e;
+    } catch (err) {
+      onError(err);
+      return null;
+    }
+  }, [onError]);
+
+  useEffect(() => {
+    cargarEstado();
+    return () => clearInterval(pollRef.current);
+  }, [cargarEstado]);
+
+  // Mientras esperamos el escaneo, refrescamos estado + QR cada 4s.
+  function iniciarPolling() {
+    clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      const e = await cargarEstado();
+      if (e?.conectado) {
+        clearInterval(pollRef.current);
+      } else if (e && !e.qr && e.estado !== "connecting") {
+        // si dejó de haber QR y no está conectando, pedimos uno nuevo
+        try { setEstado(await apiPost("/admin/whatsapp/conectar")); } catch { /* ignore */ }
+      }
+    }, 4000);
+  }
+
+  async function conectar() {
+    setCargando(true);
+    try {
+      const e = await apiPost("/admin/whatsapp/conectar");
+      setEstado(e);
+      if (!e.conectado) iniciarPolling();
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  async function desconectar() {
+    if (!(await dialog.confirm("¿Desconectar el WhatsApp del bot? Vas a tener que volver a escanear el QR para reconectarlo."))) return;
+    setCargando(true);
+    try {
+      await apiPost("/admin/whatsapp/desconectar");
+      clearInterval(pollRef.current);
+      await cargarEstado();
+    } catch (err) {
+      onError(err);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  if (!estado) return null;
+
+  const conectado = estado.conectado;
+  const noDisponible = estado.estado === "no_disponible";
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-6 max-w-2xl">
+      <div className="flex items-center gap-2 mb-1">
+        <Bot size={16} className="text-neutral-700" strokeWidth={1.5} />
+        <h3 className="font-serif text-lg text-neutral-900">Conectar WhatsApp</h3>
+      </div>
+      <p className="text-xs text-neutral-400 mb-5">
+        Conectá el WhatsApp del negocio para activar el bot de atención 24 hs y los
+        avisos automáticos de la lista de espera. Se vincula como WhatsApp Web.
+      </p>
+
+      {noDisponible ? (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 text-sm">
+          El servicio de WhatsApp todavía no está habilitado en el servidor. Contactá al administrador.
+        </div>
+      ) : conectado ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 px-4 py-2 text-sm font-medium">
+            <Check size={15} strokeWidth={2} /> WhatsApp conectado
+          </span>
+          <button onClick={desconectar} disabled={cargando}
+            className="text-xs text-red-500 hover:text-red-700 underline underline-offset-2 disabled:opacity-50">
+            Desconectar
+          </button>
+        </div>
+      ) : estado.qr ? (
+        <div className="flex flex-col sm:flex-row items-center gap-5">
+          <img src={estado.qr} alt="Código QR de WhatsApp" className="w-52 h-52 rounded-xl border border-neutral-200 bg-white" />
+          <div className="text-sm text-neutral-600 space-y-2">
+            <p className="font-medium text-neutral-900">Escaneá este código:</p>
+            <ol className="list-decimal list-inside space-y-1 text-neutral-500">
+              <li>Abrí WhatsApp en el celular del negocio</li>
+              <li>Tocá <span className="text-neutral-700">Configuración → Dispositivos vinculados</span></li>
+              <li>Tocá <span className="text-neutral-700">Vincular un dispositivo</span> y escaneá</li>
+            </ol>
+            <p className="text-[11px] text-neutral-400">El código se renueva solo. Cuando conecte, esta tarjeta lo va a mostrar.</p>
+          </div>
+        </div>
+      ) : (
+        <button onClick={conectar} disabled={cargando}
+          className="flex items-center gap-2 rounded-full bg-neutral-900 text-white px-6 py-2.5 text-xs uppercase tracking-[0.1em] font-medium hover:bg-neutral-800 disabled:opacity-50 transition-colors">
+          {cargando ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} strokeWidth={1.5} />}
+          {cargando ? "Generando QR…" : "Conectar WhatsApp"}
+        </button>
+      )}
     </div>
   );
 }

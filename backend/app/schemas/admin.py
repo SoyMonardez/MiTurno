@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.models.enums import EstadoReserva, SegmentoCliente
+from app.models.enums import EstadoReserva, MetodoPago, SegmentoCliente
 
 
 class ReservaAdminOut(BaseModel):
@@ -18,10 +18,14 @@ class ReservaAdminOut(BaseModel):
     cliente_telefono: str | None
     profesional_nombre: str
     servicios: list[str]
+    metodo_pago: MetodoPago | None = None
+    pago_profesional: Decimal | None = None
+    pago_local: Decimal | None = None
 
 
 class AsistenciaIn(BaseModel):
     estado: EstadoReserva  # completada | no_show
+    metodo_pago: MetodoPago | None = None  # efectivo | transferencia | mercado_pago
 
 
 class ClienteAdminOut(BaseModel):
@@ -86,6 +90,36 @@ class DashboardOut(BaseModel):
 
 class SugerenciaCategoriasOut(BaseModel):
     categorias: list[str]
+
+
+class BotRespuestas(BaseModel):
+    """Respuestas personalizadas del bot de WhatsApp (vacío = usa la automática)."""
+    bienvenida: str = ""
+    precios: str = ""
+    horarios: str = ""
+    direccion: str = ""
+    reservar: str = ""
+
+
+class BotRespuestasOut(BaseModel):
+    respuestas: BotRespuestas
+    # Texto automático que usaría el bot si la respuesta queda vacía (para previsualizar).
+    automaticas: BotRespuestas
+
+
+class BotRespuestaIAIn(BaseModel):
+    clave: str  # bienvenida | precios | horarios | direccion | reservar
+
+
+class BotRespuestaIAOut(BaseModel):
+    texto: str
+
+
+class WhatsAppEstadoOut(BaseModel):
+    instancia: str | None = None
+    estado: str  # open | connecting | close | sin_instancia | no_disponible
+    qr: str | None = None      # data-URI base64 del QR cuando hay que escanear
+    conectado: bool = False
 
 
 class ServicioPopularOut(BaseModel):
