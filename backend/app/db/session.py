@@ -24,6 +24,7 @@ def set_rls_context_on_begin(session, transaction, connection):
         negocio_id = session.info.get("current_negocio_id")
         rol = session.info.get("current_user_rol")
         token = session.info.get("current_cancelacion_token")
+        profesional_id = session.info.get("current_profesional_id")
 
         connection.execute(text("SET LOCAL app.bypass_rls = 'false'"))
         connection.execute(
@@ -41,6 +42,10 @@ def set_rls_context_on_begin(session, transaction, connection):
         connection.execute(
             text("SET LOCAL app.current_cancelacion_token = :token"),
             {"token": str(token) if token is not None else ""}
+        )
+        connection.execute(
+            text("SET LOCAL app.current_profesional_id = :pid"),
+            {"pid": str(profesional_id) if profesional_id is not None else ""}
         )
 
 

@@ -11,3 +11,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </DialogProvider>
   </React.StrictMode>
 );
+
+// PWA: registramos el service worker (solo en producción, para no
+// interferir con el hot-reload de Vite en desarrollo).
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  });
+}

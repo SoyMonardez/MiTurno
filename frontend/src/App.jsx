@@ -3,6 +3,8 @@ import Negocio from "./pages/Negocio.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminPanel from "./pages/AdminPanel.jsx";
 import SuperAdmin from "./pages/SuperAdmin.jsx";
+import PanelProfesional from "./pages/PanelProfesional.jsx";
+import InstalarApp from "./components/InstalarApp.jsx";
 import CancelarReserva from "./pages/CancelarReserva.jsx";
 import DesuscribirRecordatorios from "./pages/DesuscribirRecordatorios.jsx";
 import { getToken } from "./api/client.js";
@@ -28,6 +30,14 @@ export default function App() {
           }
         />
         <Route
+          path="/profesional"
+          element={
+            <RequireAuth>
+              <PanelProfesional />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/super-admin"
           element={
             <RequireAuth>
@@ -37,6 +47,7 @@ export default function App() {
         />
         <Route path="/:slug" element={<Negocio />} />
       </Routes>
+      <InstalarApp />
     </BrowserRouter>
   );
 }

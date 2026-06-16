@@ -28,7 +28,13 @@ export default function AdminLogin() {
       const res = await apiPost("/auth/login", credenciales);
       setToken(res.access_token);
       setNegocioId(res.negocio_id);
-      navigate(res.rol === "super_admin" ? "/super-admin" : "/admin");
+      navigate(
+        res.rol === "super_admin"
+          ? "/super-admin"
+          : res.rol === "profesional"
+          ? "/profesional"
+          : "/admin"
+      );
     } catch (err) {
       setError(err.message);
     } finally {
