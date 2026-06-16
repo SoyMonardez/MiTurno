@@ -435,7 +435,7 @@ function ConfigNegocio({ onError }) {
                   {generandoDesc ? "Generando…" : "Generar con IA"}
                 </button>
               </div>
-              <textarea value={form.descripcion || ""} onChange={set("descripcion")} rows={2} className="campo-admin resize-none" placeholder="Breve descripción que verá el cliente" />
+              <textarea value={form.descripcion || ""} onChange={set("descripcion")} rows={3} className="campo-admin resize-y" placeholder="Breve descripción que verá el cliente" />
             </div>
           </div>
         </div>
@@ -908,8 +908,8 @@ function Servicios({ negocioId, onError }) {
               value={nuevo.descripcion}
               onChange={(e) => setNuevo({ ...nuevo, descripcion: e.target.value })}
               placeholder="Breve descripción que verá el cliente"
-              rows={2}
-              className="campo-admin resize-none"
+              rows={3}
+              className="campo-admin resize-y"
             />
           </div>
 
@@ -1109,7 +1109,7 @@ function ServicioFila({ servicio: s, categorias, onToggle, onActualizar, onError
           </div>
           <div>
             <Etiqueta icono={<BookOpen size={12} />} label="Descripción" />
-            <textarea value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} rows={2} className="campo-admin resize-none" />
+            <textarea value={form.descripcion || ""} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} rows={3} className="campo-admin resize-y" />
           </div>
           <div className="flex gap-2">
             <button onClick={guardar} disabled={guardando}
@@ -2235,9 +2235,9 @@ function BotRespuestas({ onError }) {
             <textarea
               value={form[clave] ?? ""}
               onChange={(e) => setForm({ ...form, [clave]: e.target.value })}
-              rows={2}
+              rows={4}
               placeholder={data?.automaticas?.[clave] || "Respuesta automática"}
-              className="campo-admin resize-none w-full text-sm"
+              className="campo-admin resize-y w-full text-sm leading-relaxed"
             />
             <p className="text-[11px] text-neutral-400 mt-1">{ayuda}</p>
           </div>

@@ -1035,9 +1035,9 @@ function HistorialCliente({ cliente, onCerrar, onError }) {
           <textarea
             value={nueva}
             onChange={(e) => setNueva(e.target.value)}
-            rows={2}
+            rows={3}
             placeholder="Anotá qué se hizo, observaciones, recomendaciones para la próxima…"
-            className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm resize-none focus:outline-none focus:border-neutral-400"
+            className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm resize-y focus:outline-none focus:border-neutral-400"
           />
           <button type="submit" disabled={guardando || !nueva.trim()}
             className="mt-2 w-full flex items-center justify-center gap-2 rounded-full bg-neutral-900 text-white py-2.5 text-xs uppercase tracking-[0.15em] disabled:opacity-40 hover:bg-neutral-800 transition-colors">
