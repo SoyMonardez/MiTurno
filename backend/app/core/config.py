@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     # IA: Groq tiene prioridad si está configurado, luego Anthropic, luego fallback local.
     groq_api_key: str = ""
     anthropic_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    # WhatsApp Gateway (Evolution API auto-hospedada en Docker). Si la URL queda
+    # vacía, los mensajes de WhatsApp se imprimen en consola (modo desarrollo).
+    evolution_api_url: str = ""
+    evolution_api_key: str = ""
+    # URL del webhook del backend que Evolution invoca por cada mensaje entrante.
+    evolution_webhook_url: str = "http://backend:8000/webhook/whatsapp"
+    # Horas que dura la oferta de un turno liberado antes de pasar al siguiente.
+    lista_espera_oferta_horas: int = 2
 
     @property
     def cors_origins_list(self) -> list[str]:

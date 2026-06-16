@@ -35,6 +35,8 @@ services:
       SMTP_TLS: ${SMTP_TLS:-true}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:
@@ -93,6 +95,32 @@ services:
     depends_on:
       - backend
 
+  # Gateway de WhatsApp (plan Premium). No arranca por defecto; activalo con:
+  #   docker compose -f docker-compose.prod.yml --profile whatsapp up -d evolution
+  # Requiere crear antes la base: docker compose ... exec db psql -U miturno -c "CREATE DATABASE evolution;"
+  evolution:
+    image: atendai/evolution-api:v2.1.1
+    restart: always
+    profiles: ["whatsapp"]
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-cambiar-esta-clave}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER:-miturno}:${POSTGRES_PASSWORD}@db:5432/evolution?schema=public
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/6
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_URL: http://backend:8000/webhook/whatsapp
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - evolution_data:/evolution/instances
+
 volumes:
   pgdata:
   uploads_data:
+  evolution_data:

@@ -13,3 +13,5 @@ celery[redis]==5.4.0
 anthropic==0.40.0
 groq==0.13.0
 python-multipart==0.0.20
+httpx==0.28.1
+dnspython==2.7.0

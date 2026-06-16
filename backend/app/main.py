@@ -10,13 +10,16 @@ from app.api import (
     catalogo,
     disponibilidad,
     negocios,
+    panel_profesional,
     portafolio,
+    premium,
     profesionales,
     resenas,
     reservas,
     seo,
     superadmin,
     uploads,
+    whatsapp,
 )
 from app.core.config import settings
 
@@ -78,6 +81,9 @@ app.include_router(admin.router)
 app.include_router(uploads.router)
 app.include_router(superadmin.router)
 app.include_router(seo.router)
+app.include_router(premium.router)
+app.include_router(panel_profesional.router)
+app.include_router(whatsapp.router)
 
 # Archivos subidos (imágenes de servicios / profesionales)
 Path("uploads").mkdir(exist_ok=True)

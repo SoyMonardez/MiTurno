@@ -62,6 +62,76 @@ def generar_ics(
     )
 
 
+import functools
+
+# TLDs reservados (RFC 2606 / RFC 6762) que NO tienen registros DNS públicos.
+# Los clientes cargados por teléfono sin correo reciben un email sintético con
+# uno de estos dominios (ej: tel-...@sin-correo.local).
+_TLDS_NO_ENVIABLES = (".local", ".invalid", ".example", ".test", ".localhost")
+_DOMINIOS_SINTETICOS = ("sin-correo.", "profesional.")
+# Dominios reservados para documentación/pruebas (RFC 2606): existen pero no
+# reciben correo. Son los típicos que se cargan como dato de prueba.
+_DOMINIOS_RESERVADOS = {
+    "example.com", "example.net", "example.org", "example.edu",
+    "test.com", "test.net", "test.org",
+}
+
+
+@functools.lru_cache(maxsize=1024)
+def _dominio_recibe_correo(dominio: str) -> bool:
+    """¿El dominio puede recibir correo? Verifica registros MX por DNS.
+
+    - Con MX válidos → True.
+    - Dominio inexistente (NXDOMAIN) o sin MX → False (acá caen test.com,
+      example.com, typos como gmial.com, etc.: por eso rebotaban los correos).
+    - Error de red/resolución → True: ante una falla temporal de DNS preferimos
+      intentar el envío y no bloquear correos legítimos.
+
+    Cacheado por dominio para no repetir la consulta en cada envío.
+    """
+    try:
+        import dns.resolver
+
+        resolver = dns.resolver.Resolver()
+        # Timeout corto: el correo de confirmación se envía dentro del request de
+        # crear la reserva, así que un dominio que no resuelve no debe demorarlo.
+        resolver.timeout = 3.0
+        resolver.lifetime = 3.0
+        try:
+            respuesta = resolver.resolve(dominio, "MX")
+            return len(respuesta) > 0
+        except dns.resolver.NoAnswer:
+            return False   # el dominio existe pero no tiene MX → no recibe mail
+        except dns.resolver.NXDOMAIN:
+            return False   # el dominio no existe
+    except ImportError:
+        return True        # sin dnspython instalado: no bloqueamos
+    except Exception:
+        return True        # error temporal de red/DNS: no bloqueamos
+
+
+def es_email_enviable(email: str | None) -> bool:
+    """True si el correo es una dirección real a la que tiene sentido escribir.
+
+    Descarta vacíos, direcciones mal formadas, emails sintéticos/no enrutables y
+    dominios que no pueden recibir correo (sin registros MX). Así evitamos los
+    rebotes por DNS (test.com, example.com, dominios mal tipeados, etc.).
+    """
+    if not email or "@" not in email:
+        return False
+    dominio = email.rsplit("@", 1)[1].lower().strip()
+    if not dominio or "." not in dominio:
+        return False
+    if any(dominio.endswith(tld) for tld in _TLDS_NO_ENVIABLES):
+        return False
+    if any(dominio.startswith(pref) for pref in _DOMINIOS_SINTETICOS):
+        return False
+    if dominio in _DOMINIOS_RESERVADOS:
+        return False
+    # Verificación final: el dominio tiene que poder recibir correo (registros MX).
+    return _dominio_recibe_correo(dominio)
+
+
 def _enviar_email(
     destinatario: str,
     asunto: str,
@@ -70,6 +140,12 @@ def _enviar_email(
     ics: str | None = None,
 ) -> bool:
     """Envía un email por SMTP. Si no hay SMTP configurado, lo imprime en consola."""
+    # Guard central: nunca intentamos enviar a direcciones no enrutables
+    # (evita errores de DNS y rebotes contra dominios reservados como .local).
+    if not es_email_enviable(destinatario):
+        print(f"[EMAIL OMITIDO] destinatario no enviable: {destinatario!r}", flush=True)
+        return False
+
     if not settings.smtp_host:
         print("=" * 60)
         print(f"[EMAIL SIMULADO] Para: {destinatario}")
@@ -333,6 +409,10 @@ def enviar_notificacion_satisfaccion(
     cliente_email: str,
 ) -> None:
     """Envía un correo al cliente solicitando su opinión tras finalizar su turno."""
+    # Los turnos cargados por teléfono no tienen correo real: no hay a quién escribir.
+    if not es_email_enviable(cliente_email):
+        return
+
     enlace_opinion = f"{settings.frontend_url}/{negocio.slug}?tab=resenas&opinar=true"
 
     cuerpo = (

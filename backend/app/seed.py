@@ -61,6 +61,8 @@ def run() -> None:
             direccion="Av. Siempre Viva 742",
             zona_horaria="America/Argentina/Buenos_Aires",
             email_notificaciones="admin@barberiademo.local",
+            # Premium para poder probar comisiones, lista de espera, caja y bot.
+            plan="premium",
         )
         db.add(negocio)
         db.flush()
