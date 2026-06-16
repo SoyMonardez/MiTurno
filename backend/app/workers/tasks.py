@@ -20,9 +20,31 @@ from app.services.notificaciones import (
     _enviar_email,
     _parrafo,
     _titulo,
+    es_email_enviable,
     layout_html,
 )
+from app.services.whatsapp import enviar_whatsapp
 from app.workers.celery_app import celery_app
+
+
+def _texto_wa_recordatorio(tipo, negocio, cliente, enlace) -> str:
+    """Mensaje de recordatorio con formato WhatsApp (negrita con *)."""
+    nombre = cliente.nombre.split(" ")[0] if cliente.nombre else ""
+    saludo = f"¡Hola {nombre}! 👋" if nombre else "¡Hola! 👋"
+    if tipo == TipoRecordatorio.turno_proximo:
+        return (
+            f"{saludo}\n\nTe recordamos tu turno en *{negocio.nombre}* mañana. "
+            f"¡Te esperamos! 🙌\n\nSi no podés venir, avisanos así liberamos el lugar 🙏"
+        )
+    if tipo == TipoRecordatorio.frecuencia:
+        return (
+            f"{saludo}\n\nPasó un tiempo desde tu última visita a *{negocio.nombre}*. "
+            f"¿Reservamos tu próximo turno? 👇\n{enlace}"
+        )
+    return (
+        f"{saludo}\n\nLa última vez no pudiste venir a *{negocio.nombre}*. "
+        f"Reagendá cuando quieras, te esperamos 👇\n{enlace}"
+    )
 
 _TIPO_NOTIF = {
     TipoRecordatorio.frecuencia: TipoNotificacion.recordatorio_frecuencia,
@@ -75,6 +97,19 @@ def enviar_recordatorios_vencidos() -> int:
                 rec.estado = EstadoRecordatorio.cancelado
                 continue
 
+            # Canales según la configuración del negocio.
+            canal = negocio.recordatorios_canal or "email"
+            puede_email = canal in ("email", "ambos") and es_email_enviable(cliente.email)
+            puede_wa = (
+                canal in ("whatsapp", "ambos")
+                and bool(negocio.whatsapp_instancia)
+                and bool(cliente.telefono)
+            )
+            # Si no hay ningún canal posible, cancelamos (no reintentar para siempre).
+            if not puede_email and not puede_wa:
+                rec.estado = EstadoRecordatorio.cancelado
+                continue
+
             enlace = f"{settings.frontend_url}/{negocio.slug}"
             if rec.tipo == TipoRecordatorio.turno_proximo:
                 asunto = f"Recordatorio de tu turno en {negocio.nombre}"
@@ -112,20 +147,39 @@ def enviar_recordatorios_vencidos() -> int:
                 {baja_html}
                 """,
             )
-            ok = _enviar_email(cliente.email, asunto, _cuerpo(rec, negocio, cliente), html)
-            rec.estado = (
-                EstadoRecordatorio.enviado if ok else EstadoRecordatorio.pendiente
-            )
-            db.add(
-                NotificacionLog(
-                    reserva_id=rec.reserva_id,
-                    tipo=_TIPO_NOTIF[rec.tipo],
-                    destinatario=cliente.email,
-                    enviado_en=ahora if ok else None,
-                    estado=EstadoNotificacion.enviado if ok else EstadoNotificacion.fallido,
+            enviado_algo = False
+            # Email
+            if puede_email:
+                ok = _enviar_email(cliente.email, asunto, _cuerpo(rec, negocio, cliente), html)
+                enviado_algo = enviado_algo or ok
+                db.add(
+                    NotificacionLog(
+                        reserva_id=rec.reserva_id,
+                        tipo=_TIPO_NOTIF[rec.tipo],
+                        destinatario=cliente.email,
+                        enviado_en=ahora if ok else None,
+                        estado=EstadoNotificacion.enviado if ok else EstadoNotificacion.fallido,
+                    )
                 )
+            # WhatsApp
+            if puede_wa:
+                texto_wa = _texto_wa_recordatorio(rec.tipo, negocio, cliente, enlace)
+                ok_wa = enviar_whatsapp(negocio.whatsapp_instancia, cliente.telefono, texto_wa)
+                enviado_algo = enviado_algo or ok_wa
+                db.add(
+                    NotificacionLog(
+                        reserva_id=rec.reserva_id,
+                        tipo=_TIPO_NOTIF[rec.tipo],
+                        destinatario=cliente.telefono,
+                        enviado_en=ahora if ok_wa else None,
+                        estado=EstadoNotificacion.enviado if ok_wa else EstadoNotificacion.fallido,
+                    )
+                )
+
+            rec.estado = (
+                EstadoRecordatorio.enviado if enviado_algo else EstadoRecordatorio.pendiente
             )
-            if ok:
+            if enviado_algo:
                 enviados += 1
         db.commit()
         return enviados

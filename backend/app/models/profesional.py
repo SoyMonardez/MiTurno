@@ -13,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
-from app.models.enums import TipoExcepcion
+from app.models.enums import TipoComision, TipoExcepcion
 
 profesional_servicio = Table(
     "profesional_servicio",
@@ -32,6 +32,11 @@ class Profesional(Base):
     foto: Mapped[str | None] = mapped_column(String(500), default=None)
     bio: Mapped[str | None] = mapped_column(String(2000), default=None)
     calificacion_promedio: Mapped[float | None] = mapped_column(Numeric(3, 2), default=None)
+    # Usuario asociado para el login individual del profesional (plan Premium).
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), default=None)
+    # Regla financiera: % por corte (ej: 25.00, 35.00, 45.00) o sueldo fijo del local.
+    tipo_comision: Mapped[TipoComision] = mapped_column(default=TipoComision.porcentaje_corte)
+    valor_comision: Mapped[float] = mapped_column(Numeric(5, 2), default=0)
 
     servicios: Mapped[list["Servicio"]] = relationship(secondary=profesional_servicio)
     horarios: Mapped[list["HorarioRecurrente"]] = relationship(back_populates="profesional")

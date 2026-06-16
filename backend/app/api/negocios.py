@@ -11,6 +11,7 @@ from app.models.resena import Resena
 from app.schemas.negocio import (
     NegocioCreate,
     NegocioOut,
+    NegocioAdminOut,
     NegocioPublico,
     NegocioUpdate,
     ProfesionalPublico,
@@ -40,7 +41,7 @@ def listar_negocios(db: Session = Depends(get_db)) -> list[Negocio]:
 # Va ANTES de "/{slug}" para que "mi-negocio" no se interprete como slug.
 
 
-@router.get("/mi-negocio", response_model=NegocioOut)
+@router.get("/mi-negocio", response_model=NegocioAdminOut)
 def obtener_mi_negocio(
     admin: Usuario = Depends(get_current_admin), db: Session = Depends(get_db)
 ) -> Negocio:
@@ -50,7 +51,7 @@ def obtener_mi_negocio(
     return negocio
 
 
-@router.patch("/mi-negocio", response_model=NegocioOut)
+@router.patch("/mi-negocio", response_model=NegocioAdminOut)
 def actualizar_mi_negocio(
     data: NegocioUpdate,
     admin: Usuario = Depends(get_current_admin),
@@ -105,4 +106,5 @@ def negocio_publico(slug: str, db: Session = Depends(get_db)) -> NegocioPublico:
         servicios=servicios,
         profesionales=profesionales_out,
         calificacion_promedio=float(promedio) if promedio is not None else None,
+        lista_espera_habilitada=(negocio.plan or "pro") == "premium",
     )

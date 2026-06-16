@@ -13,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
-from app.models.enums import EstadoReserva
+from app.models.enums import EstadoReserva, MetodoPago
 
 
 class Reserva(Base):
@@ -40,6 +40,10 @@ class Reserva(Base):
     inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # UTC
     fin: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # UTC
     frecuencia_recordatorio_dias: Mapped[int | None] = mapped_column(Integer, default=None)
+    # Cobro y split de comisión (se completan al marcar el turno como completado).
+    metodo_pago: Mapped[MetodoPago | None] = mapped_column(default=None)
+    pago_profesional: Mapped[float | None] = mapped_column(Numeric(10, 2), default=None)
+    pago_local: Mapped[float | None] = mapped_column(Numeric(10, 2), default=None)
     token_cancelacion: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     notas: Mapped[str | None] = mapped_column(String(2000), default=None)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

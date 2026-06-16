@@ -1206,6 +1206,44 @@ function ModalReserva({
     return false;
   }, [paso, slot, datos]);
 
+  const [slotDescuento, setSlotDescuento] = useState(0);
+
+  useEffect(() => {
+    function calcularDescuento() {
+      if (!slot) {
+        setSlotDescuento(0);
+        return;
+      }
+      try {
+        const guardados = localStorage.getItem("descuentos_horas_muertas");
+        if (!guardados) {
+          setSlotDescuento(0);
+          return;
+        }
+        const parsed = JSON.parse(guardados);
+        const pythonWeekday = fechaObj.getDay() === 0 ? 6 : fechaObj.getDay() - 1;
+        const dateObj = new Date(slot.inicio);
+        const hourNum = dateObj.getHours();
+        const bloque = hourNum < 13 ? "manana" : "tarde";
+        const key = `${pythonWeekday}-${bloque}`;
+        if (parsed[key]) {
+          setSlotDescuento(0.2);
+          return;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      setSlotDescuento(0);
+    }
+    calcularDescuento();
+    window.addEventListener("storage_descuentos_updated", calcularDescuento);
+    window.addEventListener("storage", calcularDescuento);
+    return () => {
+      window.removeEventListener("storage_descuentos_updated", calcularDescuento);
+      window.removeEventListener("storage", calcularDescuento);
+    };
+  }, [slot, fechaObj]);
+
   function avanzar() {
     if (paso === 3) onConfirmar();
     else setPaso((p) => p + 1);
@@ -1300,7 +1338,21 @@ function ModalReserva({
               <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400 mb-0.5">
                 {paso === 3 ? "Total a pagar" : "Total"}
               </p>
-              <p className="font-serif text-2xl text-neutral-900">{formatoPrecio(totalPrecio)}</p>
+              {slotDescuento > 0 ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="font-serif text-2xl text-neutral-900">
+                    {formatoPrecio(totalPrecio * (1 - slotDescuento))}
+                  </span>
+                  <span className="text-xs text-neutral-400 line-through">
+                    {formatoPrecio(totalPrecio)}
+                  </span>
+                  <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-250">
+                    20% OFF
+                  </span>
+                </div>
+              ) : (
+                <p className="font-serif text-2xl text-neutral-900">{formatoPrecio(totalPrecio)}</p>
+              )}
             </div>
             <button
               onClick={avanzar}
@@ -1399,6 +1451,42 @@ function PasoFechaHora({
     }
   }, [selFechaIso]);
 
+  const [slotDescuento, setSlotDescuento] = useState(0);
+
+  useEffect(() => {
+    function calcularDescuento() {
+      if (!slot) {
+        setSlotDescuento(0);
+        return;
+      }
+      try {
+        const guardados = localStorage.getItem("descuentos_horas_muertas");
+        if (!guardados) {
+          setSlotDescuento(0);
+          return;
+        }
+        const parsed = JSON.parse(guardados);
+        const pythonWeekday = fechaObj.getDay() === 0 ? 6 : fechaObj.getDay() - 1;
+        const dateObj = new Date(slot.inicio);
+        const hourNum = dateObj.getHours();
+        const bloque = hourNum < 13 ? "manana" : "tarde";
+        const key = `${pythonWeekday}-${bloque}`;
+        if (parsed[key]) {
+          setSlotDescuento(0.2);
+          return;
+        }
+      } catch (e) {}
+      setSlotDescuento(0);
+    }
+    calcularDescuento();
+    window.addEventListener("storage_descuentos_updated", calcularDescuento);
+    window.addEventListener("storage", calcularDescuento);
+    return () => {
+      window.removeEventListener("storage_descuentos_updated", calcularDescuento);
+      window.removeEventListener("storage", calcularDescuento);
+    };
+  }, [slot, fechaObj]);
+
   const slotsFranja = franjas?.[franja] ?? [];
   const hayAlgunSlot = franjas && (franjas.manana?.length || franjas.tarde?.length || franjas.noche?.length);
 
@@ -1447,10 +1535,24 @@ function PasoFechaHora({
         <p className="font-serif text-base text-neutral-900">
           {serviciosElegidos.map((s) => s.nombre).join(" · ")}
         </p>
-        <p className="text-xs text-neutral-500 mt-1">
-          {totalDuracion} min · {profesionalId
-            ? (negocio.profesionales ?? []).find((p) => p.id === profesionalId)?.nombre ?? "Profesional"
-            : "Cualquier profesional"} · {formatoPrecio(totalPrecio)}
+        <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1.5 flex-wrap">
+          <span>{totalDuracion} min</span>
+          <span>·</span>
+          <span>
+            {profesionalId
+              ? (negocio.profesionales ?? []).find((p) => p.id === profesionalId)?.nombre ?? "Profesional"
+              : "Cualquier profesional"}
+          </span>
+          <span>·</span>
+          {slotDescuento > 0 ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-semibold text-neutral-850">{formatoPrecio(totalPrecio * (1 - slotDescuento))}</span>
+              <span className="line-through text-neutral-450 text-[11px]">{formatoPrecio(totalPrecio)}</span>
+              <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-250">20% OFF</span>
+            </span>
+          ) : (
+            <span>{formatoPrecio(totalPrecio)}</span>
+          )}
         </p>
       </div>
 
@@ -1480,7 +1582,12 @@ function PasoFechaHora({
       <div className="px-5 pb-5">
         {cargandoSlots && <p className="text-sm text-neutral-400 text-center py-8">Buscando horarios…</p>}
         {!cargandoSlots && franjas && !hayAlgunSlot && (
-          <p className="text-sm text-neutral-400 text-center py-8">No hay horarios este día. Probá otra fecha.</p>
+          <div className="text-center py-8">
+            <p className="text-sm text-neutral-400">No hay horarios este día. Probá otra fecha.</p>
+            {negocio?.lista_espera_habilitada && (
+              <ListaEsperaCTA negocio={negocio} fechaObj={fechaObj} />
+            )}
+          </div>
         )}
         {!cargandoSlots && hayAlgunSlot && slotsFranja.length === 0 && (
           <p className="text-sm text-neutral-400 text-center py-6">Sin horarios en este período.</p>
@@ -1596,6 +1703,25 @@ function CampoContacto({ label, icon: Icon, error, children }) {
 // ─── Paso 4: Confirmación ─────────────────────────────────────────────────────
 
 function PasoConfirmacion({ reserva, datos, negocio, onReset }) {
+  const slotDescuento = useMemo(() => {
+    try {
+      const guardados = localStorage.getItem("descuentos_horas_muertas");
+      if (!guardados) return 0;
+      const parsed = JSON.parse(guardados);
+      
+      const dateObj = new Date(reserva.inicio);
+      const daySemana = dateObj.getDay();
+      const pythonWeekday = daySemana === 0 ? 6 : daySemana - 1;
+      const hourNum = dateObj.getHours();
+      const bloque = hourNum < 13 ? "manana" : "tarde";
+      const key = `${pythonWeekday}-${bloque}`;
+      if (parsed[key]) return 0.2;
+    } catch (e) {}
+    return 0;
+  }, [reserva]);
+
+  const precioFinal = slotDescuento > 0 ? Number(reserva.total_precio) * (1 - slotDescuento) : Number(reserva.total_precio);
+
   return (
     <div className="flex flex-col items-center justify-center p-6 py-12 text-center fade-up">
       <div className="w-20 h-20 rounded-full border-2 border-neutral-900 flex items-center justify-center mb-6 scale-in">
@@ -1610,7 +1736,20 @@ function PasoConfirmacion({ reserva, datos, negocio, onReset }) {
       <div className="w-full border-y border-neutral-200 divide-y divide-neutral-100 mb-8">
         <FilaResumen label="Hora" valor={horaLocal(reserva.inicio)} />
         <FilaResumen label="Duración" valor={`${reserva.total_duracion} min`} />
-        <FilaResumen label="Total" valor={formatoPrecio(reserva.total_precio)} />
+        <FilaResumen 
+          label="Total" 
+          valor={
+            slotDescuento > 0 ? (
+              <span className="flex items-center gap-1.5 justify-end">
+                <span className="text-neutral-450 line-through text-xs">{formatoPrecio(reserva.total_precio)}</span>
+                <span className="font-semibold text-emerald-650">{formatoPrecio(precioFinal)}</span>
+                <span className="text-[8px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200 flex-shrink-0">20% OFF</span>
+              </span>
+            ) : (
+              formatoPrecio(reserva.total_precio)
+            )
+          } 
+        />
       </div>
 
       <button
@@ -1662,6 +1801,111 @@ function SkeletonPage() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Lista de espera (Premium): día completo ──────────────────────────────────
+
+function ListaEsperaCTA({ negocio, fechaObj }) {
+  const [abierto, setAbierto] = useState(false);
+  const [form, setForm] = useState({ nombre: "", telefono: "", bloque: "tarde" });
+  const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState(null); // "ok" | mensaje de error
+
+  async function anotarse(e) {
+    e.preventDefault();
+    if (!form.nombre.trim() || !form.telefono.trim()) return;
+    setEnviando(true);
+    setResultado(null);
+    try {
+      await apiPost(`/negocios/${negocio.slug}/lista-espera`, {
+        nombre: form.nombre.trim(),
+        telefono: form.telefono.trim(),
+        fecha: isoFecha(fechaObj),
+        bloque: form.bloque,
+      });
+      setResultado("ok");
+    } catch (err) {
+      setResultado(err.message);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (resultado === "ok") {
+    return (
+      <div className="mt-4 mx-auto max-w-sm rounded-2xl border border-emerald-200 bg-emerald-50 p-4 fade-in">
+        <p className="text-sm text-emerald-800">
+          <Check size={14} className="inline mr-1 -mt-0.5" strokeWidth={2} />
+          ¡Listo! Quedaste en la lista de espera. Si se libera un lugar te
+          avisamos por WhatsApp al instante.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      {!abierto ? (
+        <button
+          onClick={() => setAbierto(true)}
+          className="inline-flex items-center gap-2 rounded-full bg-neutral-900 text-white px-5 py-3 text-xs uppercase tracking-[0.15em] hover:bg-neutral-800 transition-colors active:scale-95"
+        >
+          <Clock size={14} strokeWidth={1.5} />
+          Anotarme en la lista de espera
+        </button>
+      ) : (
+        <form onSubmit={anotarse} className="mx-auto max-w-sm text-left space-y-3 fade-in">
+          <p className="text-xs text-neutral-500 text-center">
+            Si alguien cancela ese día, te avisamos por WhatsApp para que tomes el lugar.
+          </p>
+          <input
+            value={form.nombre}
+            onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+            placeholder="Tu nombre"
+            required
+            className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+          />
+          <input
+            value={form.telefono}
+            onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+            placeholder="WhatsApp (ej: 264 555 1234)"
+            inputMode="tel"
+            required
+            className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:border-neutral-400"
+          />
+          <div className="flex gap-2">
+            {[
+              { id: "manana", label: "Mañana" },
+              { id: "tarde", label: "Tarde" },
+            ].map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setForm({ ...form, bloque: b.id })}
+                className={`flex-1 rounded-full border py-2 text-xs uppercase tracking-[0.1em] transition-colors ${
+                  form.bloque === b.id
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 text-neutral-600"
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+          {resultado && resultado !== "ok" && (
+            <p className="text-xs text-red-500 text-center">{resultado}</p>
+          )}
+          <button
+            type="submit"
+            disabled={enviando}
+            className="w-full rounded-full bg-neutral-900 text-white py-3 text-xs uppercase tracking-[0.15em] disabled:opacity-50 hover:bg-neutral-800 transition-colors"
+          >
+            {enviando ? "Anotando…" : "Confirmar"}
+          </button>
+        </form>
+      )}
     </div>
   );
 }

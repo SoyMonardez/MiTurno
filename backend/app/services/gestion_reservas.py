@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.cliente import Cliente
-from app.models.enums import EstadoReserva
+from app.models.enums import EstadoReserva, MetodoPago
 from app.models.negocio import Negocio
+from app.models.profesional import Profesional
 from app.models.reserva import Reserva
+from app.services.comisiones import calcular_split
 from app.services.recordatorios import (
     cancelar_pendientes_de_reserva,
     programar_por_frecuencia,
@@ -60,11 +62,24 @@ def _aplicar_cancelacion(reserva: Reserva, db: Session, cuenta_como_falla: bool)
         recalcular_segmento(cliente)
     db.commit()
     db.refresh(reserva)
+
+    # Lista de espera (Premium): ofrecemos el turno liberado al primero de la cola.
+    try:
+        from app.services.lista_espera import ofrecer_turno_liberado
+
+        ofrecer_turno_liberado(reserva, db)
+    except Exception as exc:
+        print(f"[LISTA ESPERA ERROR] {exc}", flush=True)
+
     return reserva
 
 
 def marcar_asistencia(
-    reserva_id: int, negocio_id: int, estado: EstadoReserva, db: Session
+    reserva_id: int,
+    negocio_id: int,
+    estado: EstadoReserva,
+    db: Session,
+    metodo_pago: MetodoPago | None = None,
 ) -> Reserva:
     if estado not in (EstadoReserva.completada, EstadoReserva.no_show):
         raise HTTPException(400, "Estado inválido para asistencia")
@@ -81,6 +96,14 @@ def marcar_asistencia(
         cliente.turnos_completados += 1
         cliente.ultima_visita = reserva.inicio
         programar_por_frecuencia(reserva, db)
+
+        # Split financiero automático (comisiones, plan Premium).
+        reserva.metodo_pago = metodo_pago
+        profesional = db.get(Profesional, reserva.profesional_id)
+        if profesional:
+            split = calcular_split(reserva.total_precio, profesional)
+            reserva.pago_profesional = split["profesional"]
+            reserva.pago_local = split["local"]
         
         # Enviar notificación de satisfacción para opinión/reseña
         negocio = db.get(Negocio, reserva.negocio_id)

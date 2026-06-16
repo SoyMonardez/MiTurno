@@ -4,9 +4,16 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_admin
 from app.api.deps import get_db
+from app.core.planes import requiere_plan
+from app.core.security import hash_password
 from app.models.catalogo import Servicio
 from app.models.enums import RolUsuario
 from app.models.negocio import Negocio, Usuario
+from app.schemas.premium import (
+    ComisionProfesionalIn,
+    CredencialesProfesionalIn,
+    CredencialesProfesionalOut,
+)
 from app.schemas.superadmin import PLAN_PRECIOS
 
 # Límite de profesionales por plan
@@ -40,8 +47,13 @@ def _profesional_autorizado(profesional_id: int, admin: Usuario, db: Session) ->
     return profesional
 
 
-def _serializar(profesional: Profesional) -> ProfesionalOut:
-    return ProfesionalOut(
+def _serializar(
+    profesional: Profesional, db: Session | None = None, incluir_premium: bool = False
+) -> ProfesionalOut:
+    """Serializa el profesional. Los datos financieros (comisión) y el username
+    solo se incluyen en contextos autenticados (incluir_premium=True): el
+    listado público no debe exponerlos."""
+    salida = ProfesionalOut(
         id=profesional.id,
         negocio_id=profesional.negocio_id,
         nombre=profesional.nombre,
@@ -54,6 +66,13 @@ def _serializar(profesional: Profesional) -> ProfesionalOut:
         ),
         servicio_ids=[s.id for s in profesional.servicios],
     )
+    if incluir_premium:
+        salida.tipo_comision = profesional.tipo_comision
+        salida.valor_comision = float(profesional.valor_comision or 0)
+        if db is not None and profesional.usuario_id:
+            usuario = db.get(Usuario, profesional.usuario_id)
+            salida.username = usuario.username if usuario else None
+    return salida
 
 
 def _cargar_servicios(negocio_id: int, ids: list[int], db: Session) -> list[Servicio]:
@@ -105,7 +124,7 @@ def crear_profesional(
     db.add(profesional)
     db.commit()
     db.refresh(profesional)
-    return _serializar(profesional)
+    return _serializar(profesional, db, incluir_premium=True)
 
 
 @router.get("/negocios/{negocio_id}/profesionales", response_model=list[ProfesionalOut])
@@ -136,7 +155,7 @@ def actualizar_profesional(
         )
     db.commit()
     db.refresh(profesional)
-    return _serializar(profesional)
+    return _serializar(profesional, db, incluir_premium=True)
 
 
 # --- Horarios recurrentes ---
@@ -291,3 +310,107 @@ def eliminar_profesional(
             400,
             "No se puede eliminar el profesional porque tiene reservas asociadas. Habilita o deshabilita sus servicios en su lugar."
         )
+
+
+# --- Premium: listado con datos financieros, credenciales y comisión ---
+
+
+def _gate_premium_negocio(admin: Usuario, db: Session) -> Negocio:
+    negocio = db.get(Negocio, admin.negocio_id)
+    requiere_plan(negocio.plan if negocio else None, "premium", "Este módulo")
+    return negocio
+
+
+@router.get("/admin/profesionales", response_model=list[ProfesionalOut])
+def listar_profesionales_admin(
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> list[ProfesionalOut]:
+    """Listado para el panel admin: incluye comisión y acceso de cada profesional."""
+    profesionales = db.scalars(
+        select(Profesional).where(Profesional.negocio_id == admin.negocio_id)
+    )
+    return [_serializar(p, db, incluir_premium=True) for p in profesionales]
+
+
+@router.post(
+    "/profesionales/{profesional_id}/credenciales",
+    response_model=CredencialesProfesionalOut,
+)
+def configurar_credenciales(
+    profesional_id: int,
+    data: CredencialesProfesionalIn,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> CredencialesProfesionalOut:
+    """Crea (o actualiza) la cuenta de login individual del profesional."""
+    profesional = _profesional_autorizado(profesional_id, admin, db)
+    _gate_premium_negocio(admin, db)
+
+    username = data.username.strip()
+    ocupado = db.scalar(
+        select(Usuario).where(Usuario.username == username, Usuario.id != (profesional.usuario_id or 0))
+    )
+    if ocupado:
+        raise HTTPException(409, "Ese nombre de usuario ya está en uso")
+
+    if profesional.usuario_id:
+        usuario = db.get(Usuario, profesional.usuario_id)
+    else:
+        usuario = None
+
+    if usuario is None:
+        usuario = Usuario(
+            negocio_id=profesional.negocio_id,
+            email=data.email or f"{username}@profesional.local",
+            nombre=profesional.nombre,
+            rol=RolUsuario.profesional,
+        )
+        db.add(usuario)
+        db.flush()
+        profesional.usuario_id = usuario.id
+
+    usuario.username = username
+    usuario.dni = data.dni.strip()
+    usuario.password_hash = hash_password(data.password.strip())
+    usuario.rol = RolUsuario.profesional
+    usuario.activo = True
+    if data.email:
+        usuario.email = data.email
+
+    db.commit()
+    return CredencialesProfesionalOut(
+        profesional_id=profesional.id, usuario_id=usuario.id, username=username
+    )
+
+
+@router.delete("/profesionales/{profesional_id}/credenciales", status_code=204)
+def revocar_credenciales(
+    profesional_id: int,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Desactiva el acceso individual del profesional (no borra sus datos)."""
+    profesional = _profesional_autorizado(profesional_id, admin, db)
+    if profesional.usuario_id:
+        usuario = db.get(Usuario, profesional.usuario_id)
+        if usuario:
+            usuario.activo = False
+        db.commit()
+
+
+@router.patch("/profesionales/{profesional_id}/comision", response_model=ProfesionalOut)
+def configurar_comision(
+    profesional_id: int,
+    data: ComisionProfesionalIn,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> ProfesionalOut:
+    """Define la regla financiera del profesional: % por corte o fijo del local."""
+    profesional = _profesional_autorizado(profesional_id, admin, db)
+    _gate_premium_negocio(admin, db)
+    profesional.tipo_comision = data.tipo_comision
+    profesional.valor_comision = data.valor_comision
+    db.commit()
+    db.refresh(profesional)
+    return _serializar(profesional, db, incluir_premium=True)

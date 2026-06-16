@@ -3,7 +3,7 @@ from datetime import time
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import TipoExcepcion
+from app.models.enums import TipoComision, TipoExcepcion
 
 
 class HorarioBase(BaseModel):
@@ -73,3 +73,7 @@ class ProfesionalOut(ProfesionalBase):
     negocio_id: int
     calificacion_promedio: float | None = None
     servicio_ids: list[int] = []
+    # Premium: regla de comisión y si tiene cuenta de acceso propia.
+    tipo_comision: TipoComision = TipoComision.porcentaje_corte
+    valor_comision: float = 0
+    username: str | None = None

@@ -5,11 +5,15 @@ import {
   ChevronRight,
   Clock,
   Crown,
+  FileText,
   LayoutGrid,
+  Loader2,
   LogOut,
+  Percent,
   Plus,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Star,
   Trash2,
   TrendingUp,
@@ -311,6 +315,7 @@ function Turnos({ onError }) {
   const [turnos, setTurnos] = useState(null);
   const [filtroEstado, setFiltroEstado] = useState("");
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
+  const [completarId, setCompletarId] = useState(null);
   const [plan, setPlan] = useState("pro");
 
   useEffect(() => {
@@ -396,6 +401,22 @@ function Turnos({ onError }) {
         />
       )}
 
+      {completarId != null && (
+        <ModalMetodoPago
+          onClose={() => setCompletarId(null)}
+          onElegir={(metodo) => {
+            const id = completarId;
+            setCompletarId(null);
+            accion(id, () =>
+              apiPost(`/admin/reservas/${id}/asistencia`, {
+                estado: "completada",
+                metodo_pago: metodo,
+              })
+            );
+          }}
+        />
+      )}
+
       {/* Contadores por estado (filtro) */}
       {contadores && (
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
@@ -424,7 +445,7 @@ function Turnos({ onError }) {
         <div className="space-y-2">
           {turnosFiltrados.map((t) => (
             <TarjetaTurno key={t.id} turno={t} conAcciones
-              onCompletar={() => accion(t.id, () => apiPost(`/admin/reservas/${t.id}/asistencia`, { estado: "completada" }))}
+              onCompletar={() => setCompletarId(t.id)}
               onNoShow={() => accion(t.id, () => apiPost(`/admin/reservas/${t.id}/asistencia`, { estado: "no_show" }))}
               onCancelar={() => accion(t.id, () => apiPost(`/admin/reservas/${t.id}/cancelar`))}
             />
@@ -783,14 +804,21 @@ function Clientes({ onError }) {
   const [clientes, setClientes] = useState(null);
   const [busqueda, setBusqueda] = useState("");
 
+  // Traemos la lista COMPLETA una sola vez y filtramos en el cliente. Así los
+  // contadores de cada segmento son siempre correctos (no dependen del filtro
+  // activo) y cambiar de filtro es instantáneo, sin recarga ni parpadeo.
   useEffect(() => {
-    setClientes(null);
-    const q = segmento ? `?segmento=${segmento}` : "";
-    apiGet(`/admin/clientes${q}`).then(setClientes).catch(onError);
-  }, [segmento, onError]);
+    apiGet("/admin/clientes").then(setClientes).catch(onError);
+  }, [onError]);
 
   const clientesFiltrados = clientes
-    ? clientes.filter((c) => !busqueda || c.nombre.toLowerCase().includes(busqueda.toLowerCase()) || c.email.toLowerCase().includes(busqueda.toLowerCase()))
+    ? clientes.filter(
+        (c) =>
+          (!segmento || c.segmento === segmento) &&
+          (!busqueda ||
+            c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+            (c.email || "").toLowerCase().includes(busqueda.toLowerCase()))
+      )
     : null;
 
   const contadores = clientes
@@ -826,17 +854,18 @@ function Clientes({ onError }) {
         </div>
       ) : (
         <div className="grid gap-2">
-          {clientesFiltrados.map((c) => <TarjetaCliente key={c.id} cliente={c} />)}
+          {clientesFiltrados.map((c) => <TarjetaCliente key={c.id} cliente={c} onError={onError} />)}
         </div>
       )}
     </div>
   );
 }
 
-function TarjetaCliente({ cliente: c }) {
+function TarjetaCliente({ cliente: c, onError }) {
   const cfg = SEGMENTO_CONFIG[c.segmento] ?? SEGMENTO_CONFIG.nuevo;
   const wa = formatearWhatsapp(c.telefono);
   const msgWa = encodeURIComponent(`Hola ${c.nombre}, te contactamos desde el local. ¿Cómo estás?`);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
 
   const stats = [
     { label: "Visitas", valor: c.turnos_completados },
@@ -871,14 +900,175 @@ function TarjetaCliente({ cliente: c }) {
           </div>
         </div>
 
-        {/* Right: Stats (spaced out on mobile, tight on desktop) */}
-        <div className="flex items-center justify-around sm:justify-end gap-6 sm:gap-8 pt-3 sm:pt-0 border-t border-neutral-100 sm:border-0 flex-shrink-0">
-          {stats.map((s) => (
-            <div key={s.label} className="text-center min-w-[50px]">
-              <div className={`font-serif text-lg ${s.valor > 0 ? "text-neutral-900" : "text-neutral-300"}`}>{s.valor}</div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-neutral-400 font-medium">{s.label}</div>
+        {/* Right: Stats + historial */}
+        <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-8 pt-3 sm:pt-0 border-t border-neutral-100 sm:border-0 flex-shrink-0">
+          <div className="flex items-center gap-6 sm:gap-8">
+            {stats.map((s) => (
+              <div key={s.label} className="text-center min-w-[50px]">
+                <div className={`font-serif text-lg ${s.valor > 0 ? "text-neutral-900" : "text-neutral-300"}`}>{s.valor}</div>
+                <div className="text-[10px] uppercase tracking-[0.1em] text-neutral-400 font-medium">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setHistorialAbierto(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-2 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 transition-colors"
+          >
+            <FileText size={13} strokeWidth={1.5} /> Historial
+          </button>
+        </div>
+      </div>
+
+      {historialAbierto && (
+        <HistorialCliente cliente={c} onCerrar={() => setHistorialAbierto(false)} onError={onError} />
+      )}
+    </div>
+  );
+}
+
+function HistorialCliente({ cliente, onCerrar, onError }) {
+  const dialog = useDialog();
+  const [notas, setNotas] = useState(null);
+  const [nueva, setNueva] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [mejorando, setMejorando] = useState(false);
+  const [resumen, setResumen] = useState(null);
+  const [resumiendo, setResumiendo] = useState(false);
+
+  useEffect(() => {
+    apiGet(`/admin/clientes/${cliente.id}/historial`).then(setNotas).catch(onError);
+  }, [cliente.id, onError]);
+
+  async function mejorar() {
+    if (!nueva.trim()) return;
+    setMejorando(true);
+    try {
+      const r = await apiPost("/admin/ia/nota-historial", { texto: nueva.trim() });
+      if (r.texto) setNueva(r.texto);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setMejorando(false);
+    }
+  }
+
+  async function generarResumen() {
+    setResumiendo(true);
+    try {
+      const r = await apiPost(`/admin/clientes/${cliente.id}/historial/resumen`, {});
+      setResumen(r.texto);
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setResumiendo(false);
+    }
+  }
+
+  async function agregar(e) {
+    e.preventDefault();
+    if (!nueva.trim()) return;
+    setGuardando(true);
+    try {
+      const creada = await apiPost(`/admin/clientes/${cliente.id}/historial`, {
+        notas_estilo: nueva.trim(),
+      });
+      setNotas([creada, ...(notas ?? [])]);
+      setNueva("");
+      setResumen(null);
+    } catch (err) {
+      onError(err);
+      await dialog.error(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function eliminar(nota) {
+    if (!(await dialog.confirm("¿Eliminar esta nota del historial?", "Historial", { btnConfirm: "Eliminar" }))) return;
+    try {
+      await apiDelete(`/admin/clientes/${cliente.id}/historial/${nota.id}`);
+      setNotas((prev) => prev.filter((n) => n.id !== nota.id));
+    } catch (err) {
+      onError(err);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={onCerrar}>
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-neutral-100">
+          <div className="flex items-center gap-2">
+            <FileText size={16} strokeWidth={1.5} className="text-neutral-400" />
+            <div>
+              <h3 className="font-medium text-neutral-900">{cliente.nombre}</h3>
+              <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400">Historial del cliente</p>
             </div>
-          ))}
+          </div>
+          <button onClick={onCerrar} aria-label="Cerrar" className="p-2 rounded-full hover:bg-neutral-100">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-4 pt-3">
+          <button onClick={generarResumen} disabled={resumiendo}
+            className="flex items-center gap-1.5 text-xs bg-neutral-100 border border-neutral-200 text-neutral-900 rounded-full px-3 py-1.5 font-medium hover:bg-neutral-200 disabled:opacity-40 transition-colors">
+            {resumiendo ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} className="text-neutral-500" />}
+            {resumiendo ? "Resumiendo…" : "Resumen con IA"}
+          </button>
+          {resumen && (
+            <div className="mt-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">
+              {resumen}
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={agregar} className="p-4 border-b border-neutral-100">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-neutral-400">Nueva nota</span>
+            <button type="button" onClick={mejorar} disabled={mejorando || !nueva.trim()}
+              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 disabled:opacity-40 transition-colors">
+              {mejorando ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+              {mejorando ? "Mejorando…" : "Mejorar con IA"}
+            </button>
+          </div>
+          <textarea
+            value={nueva}
+            onChange={(e) => setNueva(e.target.value)}
+            rows={2}
+            placeholder="Anotá qué se hizo, observaciones, recomendaciones para la próxima…"
+            className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm resize-none focus:outline-none focus:border-neutral-400"
+          />
+          <button type="submit" disabled={guardando || !nueva.trim()}
+            className="mt-2 w-full flex items-center justify-center gap-2 rounded-full bg-neutral-900 text-white py-2.5 text-xs uppercase tracking-[0.15em] disabled:opacity-40 hover:bg-neutral-800 transition-colors">
+            <Plus size={14} strokeWidth={1.5} /> {guardando ? "Guardando…" : "Agregar nota"}
+          </button>
+        </form>
+
+        <div className="overflow-y-auto p-4 space-y-3">
+          {!notas ? (
+            <p className="text-xs text-neutral-400 text-center py-4">Cargando…</p>
+          ) : notas.length === 0 ? (
+            <p className="text-sm text-neutral-400 text-center py-6">
+              Todavía no hay notas. Agregá la primera arriba 👆
+            </p>
+          ) : (
+            notas.map((n) => (
+              <div key={n.id} className="rounded-xl bg-neutral-50 border border-neutral-100 p-3 group">
+                <p className="text-sm text-neutral-800 whitespace-pre-wrap">{n.notas_estilo}</p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400">
+                    {n.profesional_nombre ?? "Administración"} ·{" "}
+                    {new Date(n.fecha_actualizacion).toLocaleDateString("es-AR")}
+                  </p>
+                  <button onClick={() => eliminar(n)} aria-label="Eliminar"
+                    className="text-neutral-300 hover:text-red-500 transition-colors sm:opacity-0 group-hover:opacity-100">
+                    <Trash2 size={13} strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -1097,6 +1287,521 @@ function Reportes({ onError }) {
           )}
         </>
       )}
+
+      <SeccionesPremium desde={desde} hasta={hasta} onError={onError} />
+    </div>
+  );
+}
+
+// ─── Módulos Premium: caja diaria, horas muertas y lista de espera ────────────
+
+const METODO_PAGO_CONFIG = {
+  efectivo: { label: "Efectivo", color: "#10b981" },
+  transferencia: { label: "Transferencia", color: "#3b82f6" },
+  mercado_pago: { label: "Mercado Pago", color: "#0ea5e9" },
+  sin_registrar: { label: "Sin registrar", color: "#a3a3a3" },
+};
+
+function SeccionesPremium({ desde, hasta, onError }) {
+  const [plan, setPlan] = useState(null);
+
+  useEffect(() => {
+    apiGet("/admin/negocio").then((n) => setPlan(n.plan || "pro")).catch(() => setPlan("pro"));
+  }, []);
+
+  if (plan === null) return null;
+  if (plan !== "premium") {
+    return (
+      <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-5 text-center">
+        <Crown size={18} className="mx-auto mb-2 text-amber-400" />
+        <p className="text-sm text-neutral-500">
+          El <span className="font-medium">rendimiento por profesional</span>, el{" "}
+          <span className="font-medium">arqueo de caja</span>, el análisis de{" "}
+          <span className="font-medium">horas muertas</span> y la{" "}
+          <span className="font-medium">lista de espera</span> están disponibles en el plan Premium.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <>
+      <RendimientoProfesionales desde={desde} hasta={hasta} onError={onError} />
+      <CajaDiaria onError={onError} />
+      <HorasMuertas onError={onError} />
+      <ListaEsperaAdmin onError={onError} />
+    </>
+  );
+}
+
+function RendimientoProfesionales({ desde, hasta, onError }) {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    if (!desde || !hasta) return;
+    setData(null);
+    apiGet(`/admin/reportes/profesionales?desde=${desde}&hasta=${hasta}`)
+      .then(setData)
+      .catch(onError);
+  }, [desde, hasta, onError]);
+
+  if (!data) return null;
+  if (data.profesionales.length === 0) {
+    return (
+      <div>
+        <TituloSeccion>Rendimiento por profesional</TituloSeccion>
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 text-center text-sm text-neutral-400">
+          Sin turnos completados en este período.
+        </div>
+      </div>
+    );
+  }
+
+  const maxIngreso = Math.max(...data.profesionales.map((p) => Number(p.ingresos_generados)), 1);
+
+  return (
+    <div>
+      <TituloSeccion>Rendimiento por profesional</TituloSeccion>
+      <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+        {data.profesionales.map((p, i) => {
+          const pct = (Number(p.ingresos_generados) / maxIngreso) * 100;
+          return (
+            <div key={p.profesional_id} className="px-5 py-4 border-b border-neutral-100 last:border-0">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xs font-medium text-neutral-400 w-4 text-right">{i + 1}</span>
+                  <div className="w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center text-xs flex-shrink-0">
+                    {iniciales(p.nombre)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-neutral-900 truncate">{p.nombre}</div>
+                    <div className="text-[11px] text-neutral-400">
+                      {p.turnos_completados} {p.turnos_completados === 1 ? "turno" : "turnos"}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="font-serif text-lg text-neutral-900">{formatoPrecio(p.ingresos_generados)}</div>
+                  <div className="text-[11px] text-emerald-700">comisión {formatoPrecio(p.comision)}</div>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                <div className="h-full rounded-full bg-neutral-800" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+        <div className="px-5 py-3 bg-neutral-50 flex items-center justify-between text-sm">
+          <span className="text-neutral-500">Total · queda para el local</span>
+          <span className="font-medium text-neutral-900">{formatoPrecio(data.total_local)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CajaDiaria({ onError }) {
+  const [fecha, setFecha] = useState(isoFecha(new Date()));
+  const [caja, setCaja] = useState(null);
+
+  useEffect(() => {
+    setCaja(null);
+    apiGet(`/admin/reportes/caja?fecha=${fecha}`).then(setCaja).catch(onError);
+  }, [fecha, onError]);
+
+  // Gráfico de torta con conic-gradient (sin librerías).
+  let torta = null;
+  if (caja && Number(caja.total) > 0) {
+    let acumulado = 0;
+    const segmentos = caja.por_metodo.map((m) => {
+      const desde = (acumulado / Number(caja.total)) * 360;
+      acumulado += Number(m.total);
+      const hastaGrados = (acumulado / Number(caja.total)) * 360;
+      const cfg = METODO_PAGO_CONFIG[m.metodo_pago] ?? METODO_PAGO_CONFIG.sin_registrar;
+      return `${cfg.color} ${desde}deg ${hastaGrados}deg`;
+    });
+    torta = `conic-gradient(${segmentos.join(", ")})`;
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <TituloSeccion>Caja del día</TituloSeccion>
+        <input
+          type="date"
+          value={fecha}
+          onChange={(e) => setFecha(e.target.value)}
+          className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-sm"
+        />
+      </div>
+      {!caja ? (
+        <Cargando />
+      ) : caja.turnos_completados === 0 ? (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400">
+          Sin turnos completados ese día. Marcá los turnos como completados (con su
+          método de pago) para armar el arqueo automático.
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div
+              className="w-36 h-36 rounded-full flex-shrink-0"
+              style={{ background: torta ?? "#e5e5e5" }}
+              role="img"
+              aria-label="Distribución de cobros por método de pago"
+            >
+              <div className="w-full h-full rounded-full flex items-center justify-center">
+                <div className="w-20 h-20 rounded-full bg-white flex flex-col items-center justify-center">
+                  <span className="text-[9px] uppercase tracking-[0.1em] text-neutral-400">Total</span>
+                  <span className="text-sm font-semibold text-neutral-900">{formatoPrecio(caja.total)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 w-full space-y-2">
+              {caja.por_metodo.map((m) => {
+                const cfg = METODO_PAGO_CONFIG[m.metodo_pago] ?? METODO_PAGO_CONFIG.sin_registrar;
+                return (
+                  <div key={m.metodo_pago} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: cfg.color }} />
+                      <span className="text-neutral-700">{cfg.label}</span>
+                      <span className="text-xs text-neutral-400">×{m.cantidad}</span>
+                    </div>
+                    <span className="font-medium text-neutral-900">{formatoPrecio(m.total)}</span>
+                  </div>
+                );
+              })}
+              <div className="border-t border-neutral-100 pt-2 mt-2 space-y-1 text-sm">
+                <div className="flex justify-between text-neutral-500">
+                  <span>Comisiones de profesionales</span>
+                  <span>{formatoPrecio(caja.total_comisiones)}</span>
+                </div>
+                <div className="flex justify-between font-medium text-neutral-900">
+                  <span>Queda para el local</span>
+                  <span>{formatoPrecio(caja.total_local)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SlotOcupacion({ slot, diaSemana, bloqueClave }) {
+  const [descuentoActivo, setDescuentoActivo] = useState(() => {
+    try {
+      const guardados = localStorage.getItem("descuentos_horas_muertas");
+      if (!guardados) return false;
+      const parsed = JSON.parse(guardados);
+      return !!parsed[`${diaSemana}-${bloqueClave}`];
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const toggleDescuento = () => {
+    try {
+      const guardados = localStorage.getItem("descuentos_horas_muertas");
+      const parsed = guardados ? JSON.parse(guardados) : {};
+      const nuevoEstado = !descuentoActivo;
+      parsed[`${diaSemana}-${bloqueClave}`] = nuevoEstado;
+      localStorage.setItem("descuentos_horas_muertas", JSON.stringify(parsed));
+      setDescuentoActivo(nuevoEstado);
+      window.dispatchEvent(new Event("storage_descuentos_updated"));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const pct = slot.ocupacion_pct;
+  const alerta = slot.alerta;
+
+  let progressBg = "bg-neutral-800";
+  let textClass = "text-neutral-700";
+  let badgeColor = "bg-neutral-100 text-neutral-600 font-medium";
+  let badgeLabel = "Normal";
+
+  if (alerta) {
+    progressBg = "bg-rose-500";
+    textClass = "text-rose-600 font-semibold";
+    badgeColor = "bg-rose-50 text-rose-600 border border-rose-100 font-semibold";
+    badgeLabel = "Baja";
+  } else if (pct >= 50) {
+    progressBg = "bg-emerald-500";
+    textClass = "text-emerald-600 font-semibold";
+    badgeColor = "bg-emerald-50 text-emerald-600 border border-emerald-100 font-semibold";
+    badgeLabel = "Alta";
+  } else {
+    progressBg = "bg-amber-500";
+    textClass = "text-amber-600 font-semibold";
+    badgeColor = "bg-amber-50 text-amber-600 border border-amber-100 font-semibold";
+    badgeLabel = "Media";
+  }
+
+  return (
+    <div className="space-y-2 py-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-neutral-500 font-medium">{slot.bloque}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[9px] uppercase px-2 py-0.5 rounded-full ${badgeColor}`}>
+            {badgeLabel}
+          </span>
+          <span className={`font-mono text-xs ${textClass}`}>{pct}%</span>
+        </div>
+      </div>
+
+      <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${progressBg}`}
+          style={{ width: `${Math.min(pct, 100)}%` }}
+        />
+      </div>
+
+      {alerta ? (
+        <button
+          onClick={toggleDescuento}
+          className={`w-full text-left mt-1.5 flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-xl border transition-all duration-200 ${
+            descuentoActivo
+              ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/70"
+              : "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-350 hover:text-neutral-800 hover:bg-neutral-50"
+          }`}
+        >
+          <span className="flex items-center gap-1">
+            <Percent size={11} className={descuentoActivo ? "text-emerald-600" : "text-neutral-400"} />
+            {descuentoActivo ? "Descuento 20% activo" : "Activar 20% OFF"}
+          </span>
+          <span className={`h-4 w-7 rounded-full flex items-center p-0.5 transition-colors duration-200 ${descuentoActivo ? "bg-emerald-500" : "bg-neutral-200"}`}>
+            <span className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${descuentoActivo ? "translate-x-3" : "translate-x-0"}`} />
+          </span>
+        </button>
+      ) : (
+        <div className="text-[10px] text-neutral-400 italic pt-1 pl-0.5">
+          Ocupación saludable
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HorasMuertas({ onError }) {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    apiGet("/admin/reportes/horas-muertas?semanas=4").then(setData).catch(onError);
+  }, [onError]);
+
+  if (!data || data.franjas.length === 0) return null;
+
+  // Group franjas by dia_semana
+  const diasAgrupados = {};
+  data.franjas.forEach((f) => {
+    const diaSemana = f.dia_semana;
+    if (!diasAgrupados[diaSemana]) {
+      diasAgrupados[diaSemana] = {
+        dia_nombre: f.dia_nombre,
+        dia_semana: diaSemana,
+        manana: null,
+        tarde: null,
+      };
+    }
+    if (f.bloque === "Mañana") {
+      diasAgrupados[diaSemana].manana = f;
+    } else if (f.bloque === "Tarde") {
+      diasAgrupados[diaSemana].tarde = f;
+    }
+  });
+
+  const listaDias = Object.values(diasAgrupados).sort((a, b) => a.dia_semana - b.dia_semana);
+  const alertCount = data.franjas.filter((f) => f.alerta).length;
+
+  return (
+    <div className="space-y-4">
+      <TituloSeccion>Horas muertas (últimas 4 semanas)</TituloSeccion>
+
+      {alertCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/85 rounded-2xl p-4 mb-2 relative overflow-hidden shadow-sm">
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.03] select-none pointer-events-none">
+            <Sparkles size={120} className="text-amber-600" />
+          </div>
+          <div className="flex gap-3.5 items-start relative z-10">
+            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl flex-shrink-0">
+              <Sparkles size={18} className="animate-pulse" />
+            </div>
+            <div className="space-y-1 min-w-0">
+              <h4 className="font-semibold text-neutral-900 text-sm flex items-center gap-1.5 flex-wrap">
+                Recomendación de Optimización
+                <span className="text-[9px] bg-amber-200/60 text-amber-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  IA Insight
+                </span>
+              </h4>
+              <p className="text-xs text-neutral-600 leading-relaxed max-w-xl">
+                Detectamos <span className="font-semibold text-neutral-850">{alertCount} franjas horarias</span> con ocupación crítica (menor al 20%). 
+                Activá la promoción del 20% en las horas marcadas para incentivar reservas y rellenar tu agenda.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {listaDias.map((dia) => (
+          <div
+            key={dia.dia_semana}
+            className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-sm hover:border-neutral-350 transition-colors flex flex-col justify-between"
+          >
+            <div>
+              <h3 className="font-semibold text-neutral-800 text-sm mb-3.5 flex items-center gap-2">
+                <span className="w-1.5 h-3.5 rounded bg-neutral-900" />
+                {dia.dia_nombre}
+              </h3>
+              <div className="space-y-4">
+                {dia.manana ? (
+                  <SlotOcupacion slot={dia.manana} diaSemana={dia.dia_semana} bloqueClave="manana" />
+                ) : (
+                  <div className="opacity-40 select-none py-1 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-neutral-450">Mañana</span>
+                      <span className="text-[9px] font-medium tracking-wide uppercase">Sin agenda</span>
+                    </div>
+                    <div className="h-1.5 bg-neutral-100 rounded-full" />
+                  </div>
+                )}
+                
+                <div className="border-t border-neutral-100 my-1" />
+
+                {dia.tarde ? (
+                  <SlotOcupacion slot={dia.tarde} diaSemana={dia.dia_semana} bloqueClave="tarde" />
+                ) : (
+                  <div className="opacity-40 select-none py-1 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-neutral-450">Tarde</span>
+                      <span className="text-[9px] font-medium tracking-wide uppercase">Sin agenda</span>
+                    </div>
+                    <div className="h-1.5 bg-neutral-100 rounded-full" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const BLOQUE_LABEL = { manana: "Mañana", tarde: "Tarde" };
+const ESTADO_ESPERA_CONFIG = {
+  pendiente: { label: "Esperando", cls: "bg-neutral-100 text-neutral-600" },
+  notificado: { label: "Avisado", cls: "bg-blue-50 text-blue-600" },
+  confirmado: { label: "Confirmó", cls: "bg-emerald-50 text-emerald-700" },
+  expirado: { label: "Expiró", cls: "bg-neutral-100 text-neutral-400" },
+  cancelado: { label: "Cancelado", cls: "bg-red-50 text-red-500" },
+};
+
+function ListaEsperaAdmin({ onError }) {
+  const [registros, setRegistros] = useState(null);
+  const dialog = useDialog();
+
+  const cargar = useCallback(() => {
+    apiGet(`/admin/lista-espera?desde=${isoFecha(new Date())}`)
+      .then(setRegistros)
+      .catch(onError);
+  }, [onError]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function quitar(r) {
+    const ok = await dialog.confirm(
+      `¿Quitar a ${r.nombre} de la lista de espera?`,
+      "Lista de espera",
+      { btnConfirm: "Quitar" }
+    );
+    if (!ok) return;
+    try {
+      await apiDelete(`/admin/lista-espera/${r.id}`);
+      cargar();
+    } catch (err) {
+      onError(err);
+    }
+  }
+
+  if (!registros) return null;
+  return (
+    <div>
+      <TituloSeccion>Lista de espera</TituloSeccion>
+      {registros.length === 0 ? (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 text-center text-sm text-neutral-400">
+          Nadie anotado por ahora. Cuando un día esté completo, tus clientes podrán
+          anotarse desde tu página y serán avisados por WhatsApp si se libera un lugar.
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+          {registros.map((r) => {
+            const cfg = ESTADO_ESPERA_CONFIG[r.estado] ?? ESTADO_ESPERA_CONFIG.pendiente;
+            return (
+              <div key={r.id} className="flex items-center justify-between gap-3 px-5 py-3 border-b border-neutral-100 last:border-0">
+                <div className="min-w-0">
+                  <div className="text-sm text-neutral-900">{r.nombre}</div>
+                  <div className="text-xs text-neutral-400">
+                    {r.telefono} · {new Date(r.fecha + "T00:00:00").toLocaleDateString("es-AR")} ·{" "}
+                    {BLOQUE_LABEL[r.bloque] ?? r.bloque}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded-full ${cfg.cls}`}>
+                    {cfg.label}
+                  </span>
+                  {(r.estado === "pendiente" || r.estado === "notificado") && (
+                    <button onClick={() => quitar(r)} aria-label="Quitar" className="p-1.5 rounded-full text-neutral-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModalMetodoPago({ onClose, onElegir }) {
+  const opciones = [
+    { id: "efectivo", label: "Efectivo" },
+    { id: "transferencia", label: "Transferencia" },
+    { id: "mercado_pago", label: "Mercado Pago" },
+    { id: null, label: "Sin registrar" },
+  ];
+  return (
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl p-5 scale-in">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-medium text-neutral-900">Completar turno</h3>
+            <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400">¿Cómo pagó el cliente?</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="p-2 rounded-full hover:bg-neutral-100">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="space-y-2">
+          {opciones.map((o) => (
+            <button
+              key={o.label}
+              onClick={() => onElegir(o.id)}
+              className={`w-full rounded-xl border px-4 py-3 text-sm text-left transition-colors ${
+                o.id
+                  ? "border-neutral-200 text-neutral-800 hover:border-neutral-900"
+                  : "border-dashed border-neutral-200 text-neutral-400 hover:text-neutral-600"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -25,6 +25,14 @@ class Negocio(Base):
     # Minutos de anticipación mínima para que el cliente pueda cancelar online.
     cancelacion_anticipacion_min: Mapped[int] = mapped_column(default=20)
     redes: Mapped[str | None] = mapped_column(String(1000), default=None)
+    # Nombre de la instancia en Evolution API (gateway de WhatsApp, plan Premium).
+    # El webhook entrante usa este valor para saber a qué negocio pertenece el mensaje.
+    whatsapp_instancia: Mapped[str | None] = mapped_column(String(120), unique=True, default=None)
+    # Respuestas personalizadas del bot para las palabras clave (JSON: {clave: texto}).
+    # Si una clave está vacía, el bot usa la respuesta automática generada con los datos.
+    bot_respuestas: Mapped[str | None] = mapped_column(String(4000), default=None)
+    # Canal de los recordatorios automáticos: 'email' | 'whatsapp' | 'ambos'.
+    recordatorios_canal: Mapped[str] = mapped_column(String(20), default="email")
     mapa_url: Mapped[str | None] = mapped_column(String(1000), default=None)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

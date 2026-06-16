@@ -34,12 +34,22 @@ class NegocioUpdate(BaseModel):
     cancelacion_anticipacion_min: int | None = None
     redes: str | None = None
     mapa_url: str | None = None
+    whatsapp_instancia: str | None = None
+    recordatorios_canal: str | None = None  # email | whatsapp | ambos
 
 
 class NegocioOut(NegocioBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     activo: bool
+
+
+class NegocioAdminOut(NegocioOut):
+    """Vista del admin: incluye plan e instancia de WhatsApp (no públicos)."""
+
+    plan: str = "pro"
+    whatsapp_instancia: str | None = None
+    recordatorios_canal: str = "email"
 
 
 class ProfesionalPublico(BaseModel):
@@ -59,3 +69,5 @@ class NegocioPublico(NegocioOut):
     servicios: list[ServicioOut] = []
     profesionales: list[ProfesionalPublico] = []
     calificacion_promedio: float | None = None
+    # Premium: permite anotarse en lista de espera cuando el día está lleno.
+    lista_espera_habilitada: bool = False
