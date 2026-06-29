@@ -2,6 +2,10 @@
 
 SaaS propio de gestión de turnos para negocios de servicios (barberías, peluquerías, profesionales independientes). Multi-tenant: un solo sistema atiende a múltiples negocios, cada uno con sus propios datos aislados (RLS forzado en PostgreSQL).
 
+**Demo en vivo:** [miturno.alejomonardez.com/miturno](https://miturno.alejomonardez.com/miturno)
+
+En mi [portafolio personal](https://alejomonardez.com) están las demos del resto de mis proyectos.
+
 ## El problema
 
 Los negocios chicos de servicios suelen agendar turnos a mano: WhatsApp, agenda de papel o planillas sueltas. Eso trae problemas conocidos: dobles reservas, clientes que no se enteran de una cancelación, nadie que avise un recordatorio, y cero visibilidad sobre cuánto factura cada empleado o qué horarios quedan vacíos.
@@ -11,13 +15,23 @@ Los negocios chicos de servicios suelen agendar turnos a mano: WhatsApp, agenda 
 Una plataforma que el negocio puede usar de punta a punta sin depender de un técnico:
 
 - **Reservas online + panel admin**: el cliente reserva solo desde una página pública; el negocio gestiona disponibilidad, profesionales, servicios y categorías.
-- **Bot de WhatsApp 24/7** (Evolution API + IA con Groq/Llama): agenda turnos por chat de forma conversacional, responde precios/horarios/dirección al instante, detecta quejas y las deriva, y reconoce al cliente por su historial. Anti-alucinación: solo responde con datos reales del negocio (sin RAG con vectores — innecesario para el volumen de datos de una PyME).
+- **Bot de WhatsApp 24/7** (Evolution API + IA con Groq/Llama): agenda turnos por chat de forma conversacional, responde precios/horarios/dirección al instante, detecta quejas y las deriva, y reconoce al cliente por su historial. Responde solo con datos reales del negocio (base de conocimiento propia + reglas anti-alucinación), nunca inventa información.
 - **Recordatorios automáticos** por email o WhatsApp (turno próximo, frecuencia, inasistencia), para bajar el ausentismo.
 - **Lista de espera inteligente**: si un día está lleno, ofrece el lugar automáticamente por WhatsApp cuando se libera un turno.
 - **Plan Premium con panel individual por profesional**: cada empleado ve solo sus turnos, su comisión (% o fijo) y el historial de cada cliente, sin acceso a la caja completa del negocio.
 - **Reportes**: caja diaria por método de pago, horas muertas por franja horaria, rendimiento por profesional.
 - **Segmentación de clientes** (nuevo/regular/fiel/en riesgo) para que el negocio sepa a quién recontactar.
 - **PWA**: se instala como app en el celular, tanto para el negocio como para sus profesionales.
+
+## Flujo de uso
+
+1. El negocio se da de alta y configura sus servicios, profesionales y horarios desde el panel admin.
+2. El cliente reserva un turno desde la página pública o escribiendo directo por WhatsApp ("quiero un turno para corte el viernes a las 16").
+3. El bot agenda la reserva conversando, valida disponibilidad y confirma con el nombre del cliente.
+4. El sistema manda recordatorios automáticos antes del turno (email o WhatsApp).
+5. Si el cliente no puede ir, cancela y el cupo se ofrece automáticamente al primero en la lista de espera.
+6. Al finalizar el servicio, el profesional marca la asistencia y el método de pago; el sistema calcula la comisión y la registra en la caja del día.
+7. El negocio revisa reportes (caja diaria, horas muertas, rendimiento por profesional) y decide ajustes desde el panel, sin tocar código.
 
 ## Impacto
 
