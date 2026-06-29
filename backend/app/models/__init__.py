@@ -3,7 +3,12 @@ from app.models.cliente import Cliente
 from app.models.negocio import Negocio, RegistroAcceso, Usuario
 from app.models.notificacion import NotificacionLog, RecordatorioProgramado
 from app.models.portafolio import PortafolioImagen
-from app.models.premium import ClienteHistorial, ConversacionBot, ListaEspera
+from app.models.premium import (
+    ClienteHistorial,
+    ConversacionBot,
+    FeedbackCliente,
+    ListaEspera,
+)
 from app.models.profesional import (
     ExcepcionAgenda,
     HorarioRecurrente,
@@ -25,6 +30,7 @@ __all__ = [
     "PortafolioImagen",
     "ClienteHistorial",
     "ConversacionBot",
+    "FeedbackCliente",
     "ListaEspera",
     "ExcepcionAgenda",
     "HorarioRecurrente",

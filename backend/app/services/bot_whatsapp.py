@@ -30,6 +30,45 @@ def _link_reservas(negocio: Negocio) -> str:
     return f"{settings.frontend_url.rstrip('/')}/{negocio.slug}"
 
 
+# Detección simple de quejas/malestar para registrarlas y que el negocio las vea.
+_RE_QUEJA = re.compile(
+    r"\b(queja|me quejo|pesimo|horrible|malisimo|desastre|terrible|mal atendid|"
+    r"mala atencion|no me gusto|muy mal|una porqueria|porqueria|estafa|nunca mas|"
+    r"decepcion|decepcionad|maltrat|grosero|impuntual|me hicieron esperar|"
+    r"perdi mi turno|no atienden|no contestan)\b"
+)
+
+
+def _manejar_queja(negocio: Negocio, telefono: str, texto: str, cliente, db: Session) -> str | None:
+    """Si el mensaje parece una queja, la guarda para el negocio y responde con empatía."""
+    if not _RE_QUEJA.search(_normalizar(texto)):
+        return None
+    from app.models.premium import FeedbackCliente
+
+    try:
+        db.add(
+            FeedbackCliente(
+                negocio_id=negocio.id,
+                cliente_id=cliente.id if cliente else None,
+                telefono=telefono,
+                nombre=cliente.nombre if cliente else None,
+                mensaje=texto[:2000],
+                tipo="queja",
+            )
+        )
+        db.commit()
+    except Exception as exc:
+        print(f"[QUEJA ERROR] {exc}", flush=True)
+        db.rollback()
+    nombre = cliente.nombre.split(" ")[0] if cliente and cliente.nombre else ""
+    saludo = f"{nombre}, " if nombre else ""
+    return (
+        f"Lamento mucho leer esto 🙏 {saludo}ya le pasé tu comentario al equipo de "
+        f"*{negocio.nombre}* para que lo tengan en cuenta y te contacten. "
+        f"Gracias por tomarte el tiempo de avisarnos."
+    )
+
+
 def _texto_precios(negocio: Negocio, db: Session) -> str:
     servicios = list(
         db.scalars(
@@ -245,16 +284,30 @@ def _system_prompt(negocio: Negocio, db: Session, cliente=None) -> str:
             f"hacer referencia a eso de forma natural (preguntarle cómo le fue, etc.), "
             f"pero sin revelar datos médicos sensibles si no los menciona él primero."
         )
+    # Base de conocimiento cargada por el negocio (FAQs, políticas, promos).
+    conocimiento = (negocio.bot_conocimiento or "").strip()
+    bloque_conocimiento = (
+        f"\n\nINFORMACIÓN DEL NEGOCIO (usá SOLO esto, es la fuente de verdad):\n{conocimiento}"
+        if conocimiento
+        else ""
+    )
     return (
         f"Sos el asistente virtual de '{negocio.nombre}'. Tu tono es amable, directo "
-        f"y profesional, en español rioplatense. Tenés prohibido inventar servicios "
-        f"o precios. Los servicios disponibles son: {lista or 'consultar en el local'}. "
-        f"Dirección: {negocio.direccion or 'no publicada'}. "
-        + (f"{contexto} " if contexto else "")
-        + f"Si el cliente demuestra intenciones firmes de agendar un turno, respondé "
-        f"amablemente indicándole que haga clic en el siguiente enlace para congelar "
-        f"su lugar de forma inmediata: {_link_reservas(negocio)} . "
-        f"Respondé en máximo 3 oraciones, sin markdown."
+        f"y profesional, en español rioplatense.\n\n"
+        f"REGLAS ESTRICTAS (cumplilas siempre):\n"
+        f"1. NUNCA inventes datos. Solo podés afirmar lo que está acá: servicios, "
+        f"precios, dirección y la información del negocio. Si no sabés algo, decí "
+        f"'no tengo esa info, consultá en el local' — nunca te lo inventes.\n"
+        f"2. No prometas descuentos, promociones, disponibilidad ni horarios "
+        f"específicos que no estén indicados.\n"
+        f"3. Si te piden agendar, NO inventes turnos: pedile que escriba *reservar* "
+        f"para iniciar la reserva, o pasale el enlace: {_link_reservas(negocio)}\n"
+        f"4. Respondé corto (máximo 3 oraciones), sin markdown.\n\n"
+        f"DATOS:\n"
+        f"- Servicios: {lista or 'consultar en el local'}\n"
+        f"- Dirección: {negocio.direccion or 'no publicada'}"
+        + bloque_conocimiento
+        + (f"\n\nSOBRE EL CLIENTE: {contexto}" if contexto else "")
     )
 
 
@@ -268,6 +321,9 @@ def _respuesta_ia(texto: str, negocio: Negocio, db: Session, cliente=None) -> st
         resp = client.chat.completions.create(
             model=settings.groq_model,
             max_tokens=300,
+            # Temperatura baja = respuestas más determinísticas y menos "creativas"
+            # (menos alucinación).
+            temperature=0.2,
             messages=[
                 {"role": "system", "content": _system_prompt(negocio, db, cliente)},
                 {"role": "user", "content": texto},
@@ -294,6 +350,11 @@ def procesar_mensaje(negocio: Negocio, telefono: str, texto: str, db: Session) -
     reserva = manejar_conversacion(negocio, telefono, texto, db, cliente)
     if reserva is not None:
         return reserva
+
+    # 0.5 Quejas: las registramos para el negocio y respondemos con empatía.
+    queja = _manejar_queja(negocio, telefono, texto, cliente, db)
+    if queja:
+        return queja
 
     # 1. Confirmación de lista de espera ("SÍ")
     if re.fullmatch(r"\s*si\s*!*\s*", _normalizar(texto)):

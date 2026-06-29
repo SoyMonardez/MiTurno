@@ -36,6 +36,7 @@ class NegocioUpdate(BaseModel):
     mapa_url: str | None = None
     whatsapp_instancia: str | None = None
     recordatorios_canal: str | None = None  # email | whatsapp | ambos
+    bot_conocimiento: str | None = None
 
 
 class NegocioOut(NegocioBase):
@@ -50,6 +51,7 @@ class NegocioAdminOut(NegocioOut):
     plan: str = "pro"
     whatsapp_instancia: str | None = None
     recordatorios_canal: str = "email"
+    bot_conocimiento: str | None = None
 
 
 class ProfesionalPublico(BaseModel):

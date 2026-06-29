@@ -1,7 +1,7 @@
 """Modelos del plan Premium: ficha técnica de clientes y lista de espera."""
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -23,6 +23,25 @@ class ClienteHistorial(Base):
     notas_estilo: Mapped[str] = mapped_column(Text)
     fecha_actualizacion: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class FeedbackCliente(Base):
+    """Quejas / comentarios de clientes detectados por el bot, para que el negocio
+    los tenga en cuenta."""
+
+    __tablename__ = "feedback_cliente"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    negocio_id: Mapped[int] = mapped_column(ForeignKey("negocios.id"), index=True)
+    cliente_id: Mapped[int | None] = mapped_column(ForeignKey("clientes.id"), default=None)
+    telefono: Mapped[str | None] = mapped_column(String(40), default=None)
+    nombre: Mapped[str | None] = mapped_column(String(120), default=None)
+    mensaje: Mapped[str] = mapped_column(Text)
+    tipo: Mapped[str] = mapped_column(String(20), default="queja")  # queja | sugerencia
+    atendido: Mapped[bool] = mapped_column(Boolean, default=False)
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 

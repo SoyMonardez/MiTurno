@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import EstadoReserva, MetodoPago, SegmentoCliente
 
@@ -120,6 +120,18 @@ class WhatsAppEstadoOut(BaseModel):
     estado: str  # open | connecting | close | sin_instancia | no_disponible
     qr: str | None = None      # data-URI base64 del QR cuando hay que escanear
     conectado: bool = False
+
+
+class FeedbackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    cliente_id: int | None
+    telefono: str | None
+    nombre: str | None
+    mensaje: str
+    tipo: str
+    atendido: bool
+    creado_en: datetime
 
 
 class ServicioPopularOut(BaseModel):

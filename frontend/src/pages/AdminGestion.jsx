@@ -389,6 +389,7 @@ function ConfigNegocio({ onError }) {
         redes: form.redes || null,
         mapa_url: form.mapa_url || null,
         recordatorios_canal: form.recordatorios_canal || "email",
+        bot_conocimiento: form.bot_conocimiento ?? null,
       });
       setForm(res);
       setOk(true);
@@ -543,6 +544,22 @@ function ConfigNegocio({ onError }) {
               : "El envío por WhatsApp está disponible en el plan Premium."}
           </p>
         </div>
+
+        {form.plan === "premium" && (
+          <div>
+            <Etiqueta icono={<Bot size={12} />} label="Base de conocimiento del bot (anti-alucinación)" />
+            <textarea
+              value={form.bot_conocimiento || ""}
+              onChange={set("bot_conocimiento")}
+              rows={4}
+              className="campo-admin resize-none"
+              placeholder={"Cargá info real para que el bot NO invente: promociones vigentes, formas de pago, políticas de cancelación, preguntas frecuentes, etc.\nEj: Aceptamos efectivo, transferencia y Mercado Pago. Cancelaciones hasta 2 hs antes. Tenemos estacionamiento."}
+            />
+            <p className="text-xs text-neutral-400 mt-1.5">
+              El bot usa SOLO esta info (más tus servicios y horarios) para responder. Cuanto más completa, menos inventa.
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center gap-3 pt-1">
           <button type="submit" disabled={guardando}

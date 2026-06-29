@@ -33,6 +33,9 @@ class Negocio(Base):
     bot_respuestas: Mapped[str | None] = mapped_column(String(4000), default=None)
     # Canal de los recordatorios automáticos: 'email' | 'whatsapp' | 'ambos'.
     recordatorios_canal: Mapped[str] = mapped_column(String(20), default="email")
+    # Base de conocimiento del bot (FAQs, políticas, promos). Se le inyecta a la IA
+    # para que responda con datos reales y NO invente (anti-alucinación / RAG-lite).
+    bot_conocimiento: Mapped[str | None] = mapped_column(String(6000), default=None)
     mapa_url: Mapped[str | None] = mapped_column(String(1000), default=None)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

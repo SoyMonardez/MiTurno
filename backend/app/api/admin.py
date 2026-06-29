@@ -25,6 +25,7 @@ from app.schemas.admin import (
     BotRespuestas,
     BotRespuestasOut,
     ClienteAdminOut,
+    FeedbackOut,
     WhatsAppEstadoOut,
     ClienteFrecuenteOut,
     DashboardOut,
@@ -1048,3 +1049,36 @@ def ia_resumen_historial(
     if not out:
         out = f"Última nota ({notas[0].fecha_actualizacion:%d/%m/%Y}): {notas[0].notas_estilo}"
     return SugerenciaTextoOut(texto=out.strip().strip('"').strip())
+
+
+# ── Quejas / feedback de clientes (todos los planes) ─────────────────────────
+
+
+@router.get("/feedback", response_model=list[FeedbackOut])
+def listar_feedback(
+    solo_pendientes: bool = False,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> list[FeedbackOut]:
+    from app.models.premium import FeedbackCliente
+
+    consulta = select(FeedbackCliente).where(FeedbackCliente.negocio_id == admin.negocio_id)
+    if solo_pendientes:
+        consulta = consulta.where(FeedbackCliente.atendido.is_(False))
+    filas = db.scalars(consulta.order_by(FeedbackCliente.creado_en.desc()).limit(100))
+    return [FeedbackOut.model_validate(f) for f in filas]
+
+
+@router.post("/feedback/{feedback_id}/atendido", status_code=204)
+def marcar_feedback_atendido(
+    feedback_id: int,
+    admin: Usuario = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    from app.models.premium import FeedbackCliente
+
+    fb = db.get(FeedbackCliente, feedback_id)
+    if not fb or fb.negocio_id != admin.negocio_id:
+        raise HTTPException(404, "No encontrado")
+    fb.atendido = True
+    db.commit()

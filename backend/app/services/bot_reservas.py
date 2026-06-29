@@ -277,21 +277,40 @@ def _paso_hora(negocio, conv, datos, texto, db, cliente) -> str:
     return "¡Casi listo! ✍️ ¿A nombre de quién reservo? Decime tu *nombre*."
 
 
+def _extraer_nombre(texto: str) -> str:
+    """Saca el nombre real de frases como 'a nombre de Alejo', 'me llamo Alejo',
+    'soy Alejo' o 'hazlo con el nombre de Alejo'. Si no detecta patrón, usa el texto."""
+    t = texto.strip()
+    m = re.search(r"nombre\s+(?:de\s+|es\s+)?(.+)", t, re.IGNORECASE)
+    if m:
+        t = m.group(1)
+    else:
+        m = re.search(r"(?:me\s+llamo|soy)\s+(.+)", t, re.IGNORECASE)
+        if m:
+            t = m.group(1)
+    # Quitamos signos y limitamos a 5 palabras (un nombre no es una oración larga).
+    t = t.strip(" .,!¡¿?\"'").strip()
+    palabras = t.split()
+    if len(palabras) > 5:
+        t = " ".join(palabras[:5])
+    return t[:80]
+
+
 def _paso_confirmar(negocio, conv, datos, texto, db) -> str:
     t = _norm(texto)
     if t in ("si", "si!", "sii", "dale", "confirmo", "ok", "oka", "sip", "listo", "correcto"):
         return _crear_reserva(
             negocio, conv, datos, datos.get("nombre_sugerido", ""), datos.get("email_cliente"), db
         )
-    # Cualquier otra cosa la tomamos como el nombre con el que quiere reservar.
-    nombre = texto.strip()[:80]
+    # Cualquier otra cosa la tomamos como el nombre (extraído de la frase).
+    nombre = _extraer_nombre(texto)
     if len(nombre) < 2:
         return "Respondé *sí* para confirmar, o escribime tu nombre 🙂."
     return _crear_reserva(negocio, conv, datos, nombre, None, db)
 
 
 def _paso_nombre(negocio, conv, datos, texto, db) -> str:
-    nombre = texto.strip()[:80]
+    nombre = _extraer_nombre(texto)
     if len(nombre) < 2:
         return "Decime tu nombre para confirmar la reserva 🙂."
     return _crear_reserva(negocio, conv, datos, nombre, None, db)
@@ -305,10 +324,44 @@ def _crear_reserva(negocio, conv, datos, nombre, email, db) -> str:
 
     slot = datos["slot"]
     telefono = conv.telefono
+    inicio = datetime.fromisoformat(slot["inicio"])
+
+    # Freno anti-duplicado: si este teléfono ya tiene un turno confirmado ese mismo
+    # día, no creamos otro (evita reservas repetidas por error).
+    from app.models.cliente import Cliente
+    from app.models.enums import EstadoReserva
+    from app.models.reserva import Reserva
+    from app.services.whatsapp import normalizar_telefono
+
+    tz0 = ZoneInfo(negocio.zona_horaria)
+    dia = inicio.astimezone(tz0).date()
+    cola = normalizar_telefono(telefono)[-8:]
+    existentes = db.scalars(
+        select(Reserva)
+        .join(Cliente, Cliente.id == Reserva.cliente_id)
+        .where(
+            Reserva.negocio_id == negocio.id,
+            Reserva.estado == EstadoReserva.confirmada,
+        )
+    )
+    for r in existentes:
+        c = db.get(Cliente, r.cliente_id)
+        if (
+            c
+            and c.telefono
+            and normalizar_telefono(c.telefono).endswith(cola)
+            and r.inicio.astimezone(tz0).date() == dia
+        ):
+            _borrar_conv(conv, db)
+            return (
+                f"Ya tenés un turno confirmado para el *{dia:%d/%m}* 🙌. "
+                "Si querés cambiarlo o sacar otro día, escribime *reservar*."
+            )
+
     data = ReservaAdminCreate(
         servicio_ids=[datos["servicio_id"]],
         profesional_id=slot["profesional_id"],
-        inicio=datetime.fromisoformat(slot["inicio"]),
+        inicio=inicio,
         cliente=ClienteAdminDatos(nombre=nombre, telefono=telefono, email=email or None),
         notas="Reserva creada por el bot de WhatsApp",
     )

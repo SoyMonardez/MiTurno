@@ -827,6 +827,7 @@ function Clientes({ onError }) {
 
   return (
     <div className="space-y-4">
+      <Quejas onError={onError} />
       <div className="flex flex-wrap gap-2">
         {FILTROS_SEGMENTO.map((f) => (
           <button key={f.key} onClick={() => setSegmento(f.key)}
@@ -857,6 +858,55 @@ function Clientes({ onError }) {
           {clientesFiltrados.map((c) => <TarjetaCliente key={c.id} cliente={c} onError={onError} />)}
         </div>
       )}
+    </div>
+  );
+}
+
+function Quejas({ onError }) {
+  const [quejas, setQuejas] = useState([]);
+
+  const cargar = useCallback(() => {
+    apiGet("/admin/feedback?solo_pendientes=true").then(setQuejas).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    cargar();
+    const id = setInterval(cargar, 30000);
+    return () => clearInterval(id);
+  }, [cargar]);
+
+  async function atender(q) {
+    try {
+      await apiPost(`/admin/feedback/${q.id}/atendido`, {});
+      setQuejas((prev) => prev.filter((x) => x.id !== q.id));
+    } catch (err) {
+      onError(err);
+    }
+  }
+
+  if (!quejas.length) return null;
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+      <p className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-amber-700 font-medium mb-3">
+        <FileText size={14} strokeWidth={1.5} /> Quejas por atender ({quejas.length})
+      </p>
+      <div className="space-y-2">
+        {quejas.map((q) => (
+          <div key={q.id} className="flex items-start justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
+            <div className="min-w-0">
+              <p className="text-sm text-neutral-800">{q.mensaje}</p>
+              <p className="text-[11px] text-neutral-400 mt-1">
+                {q.nombre || q.telefono || "Cliente"} · {new Date(q.creado_en).toLocaleDateString("es-AR")}
+              </p>
+            </div>
+            <button onClick={() => atender(q)}
+              className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-neutral-900 text-white px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] hover:bg-neutral-800 transition-colors">
+              <Check size={12} strokeWidth={2} /> Atendida
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
