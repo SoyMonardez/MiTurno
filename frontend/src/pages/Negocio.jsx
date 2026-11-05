@@ -26,6 +26,7 @@ import { apiGet, apiPost } from "../api/client.js";
 import { emailValido, formatoPrecio, horaLocal, isoFecha } from "../lib/format.js";
 import { IconoNegocio } from "../lib/iconos.jsx";
 import SEO from "../components/SEO.jsx";
+import MenuUsuario from "../components/MenuUsuario.jsx";
 import aleLogo from "../assets/ale-logo.svg";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -163,6 +164,7 @@ export default function Negocio() {
   const [busqueda, setBusqueda] = useState("");
   const [resenas, setResenas] = useState(null);
   const [portafolio, setPortafolio] = useState(null);
+  const [temaOscuro, setTemaOscuro] = useState(() => localStorage.getItem("miturno_tema") === "oscuro");
 
   const [seleccion, setSeleccion] = useState([]);
 
@@ -194,6 +196,10 @@ export default function Negocio() {
   const [reserva, setReserva] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [errorModal, setErrorModal] = useState(null);
+
+  useEffect(() => {
+    localStorage.setItem("miturno_tema", temaOscuro ? "oscuro" : "claro");
+  }, [temaOscuro]);
 
   useEffect(() => {
     apiGet(`/negocios/${slug}`).then(setNegocio).catch((e) => setError(e.message));
@@ -344,10 +350,15 @@ export default function Negocio() {
   if (!negocio) return <SkeletonPage />;
 
   return (
-    <div className="min-h-screen bg-neutral-200">
+    <div className={`min-h-screen bg-neutral-200 ${temaOscuro ? "tema-oscuro" : ""}`}>
       {seoData && <SEO {...seoData} />}
       <div className="max-w-md md:max-w-3xl mx-auto min-h-screen bg-white relative">
-        <NegocioHeader negocio={negocio} />
+        <NegocioHeader
+          negocio={negocio}
+          temaOscuro={temaOscuro}
+          onCambiarTema={() => setTemaOscuro((actual) => !actual)}
+          onRegistro={(perfil) => setDatos(perfil)}
+        />
 
         {/* Hoja blanca que monta sobre el header */}
         <div className="bg-white rounded-t-3xl -mt-6 relative">
@@ -472,7 +483,7 @@ function FooterCreditos() {
 
 // ─── Header editorial negro ───────────────────────────────────────────────────
 
-function NegocioHeader({ negocio }) {
+function NegocioHeader({ negocio, temaOscuro, onCambiarTema, onRegistro }) {
   const bgStyle = negocio.logo
     ? { backgroundImage: `url(${negocio.logo})`, backgroundSize: "cover", backgroundPosition: "center" }
     : {};
@@ -482,6 +493,7 @@ function NegocioHeader({ negocio }) {
       style={bgStyle}
       className="bg-neutral-950 px-6 pt-16 pb-14 text-white text-center relative overflow-hidden"
     >
+      <MenuUsuario negocio={negocio} temaOscuro={temaOscuro} onCambiarTema={onCambiarTema} onRegistro={onRegistro} />
       {/* Filtro oscuro para asegurar legibilidad */}
       {negocio.logo && (
         <div className="absolute inset-0 bg-neutral-950/75 z-0" />
