@@ -1,4 +1,4 @@
-import { CalendarClock, Lock } from "lucide-react";
+import { CalendarClock, Eye, Lock } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiPost, setNegocioId, setToken } from "../api/client.js";
@@ -9,6 +9,7 @@ export default function AdminLogin() {
   const [form, setForm] = useState({ username: "", dni: "", password: "" });
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
+  const [mostrarContrasena, setMostrarContrasena] = useState(false);
 
   function campo(k) {
     return (e) => setForm({ ...form, [k]: e.target.value });
@@ -86,10 +87,31 @@ export default function AdminLogin() {
             label="Contraseña"
             id="current-password"
             name="password"
-            type="password"
+            type={mostrarContrasena ? "text" : "password"}
             autoComplete="current-password"
             value={form.password}
             onChange={campo("password")}
+            endAdornment={
+              <button
+                type="button"
+                aria-label="Mantener presionado para mostrar la contraseña"
+                aria-pressed={mostrarContrasena}
+                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500 focus-visible:ring-offset-2 rounded-md"
+                onPointerDown={() => setMostrarContrasena(true)}
+                onPointerUp={() => setMostrarContrasena(false)}
+                onPointerLeave={() => setMostrarContrasena(false)}
+                onPointerCancel={() => setMostrarContrasena(false)}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") setMostrarContrasena(true);
+                }}
+                onKeyUp={(e) => {
+                  if (e.key === " " || e.key === "Enter") setMostrarContrasena(false);
+                }}
+                onBlur={() => setMostrarContrasena(false)}
+              >
+                <Eye size={18} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            }
           />
           <button type="submit" disabled={enviando}
             className="w-full flex items-center justify-center gap-2 rounded-full bg-neutral-900 text-white py-3 text-xs uppercase tracking-[0.15em] font-medium hover:bg-neutral-800 disabled:opacity-50 transition-colors">
@@ -102,11 +124,14 @@ export default function AdminLogin() {
   );
 }
 
-function Campo({ label, id, ...props }) {
+function Campo({ label, id, endAdornment, ...props }) {
   return (
     <div>
       <label htmlFor={id} className="block text-[10px] uppercase tracking-[0.12em] text-neutral-400 mb-1.5">{label}</label>
-      <input id={id} {...props} required className="campo-admin" />
+      <div className="relative">
+        <input id={id} {...props} required className={`campo-admin ${endAdornment ? "pr-11" : ""}`} />
+        {endAdornment}
+      </div>
     </div>
   );
 }

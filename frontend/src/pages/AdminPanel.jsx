@@ -38,7 +38,6 @@ const TABS = [
   { id: "Dashboard", label: "Inicio", icon: LayoutGrid },
   { id: "Turnos", label: "Turnos", icon: Calendar },
   { id: "Clientes", label: "Clientes", icon: Users },
-  { id: "Reseñas", label: "Reseñas", icon: Star },
   { id: "Reportes", label: "Reportes", icon: BarChart2 },
   { id: "Gestión", label: "Gestión", icon: SlidersHorizontal },
 ];
@@ -132,7 +131,7 @@ export default function AdminPanel() {
       <main className="max-w-5xl mx-auto px-4 sm:px-5 py-6 pb-28 sm:pb-6">
         {tab === "Dashboard" && <Dashboard onError={onError} />}
         {tab === "Turnos" && <Turnos onError={onError} />}
-        {tab === "Clientes" && <Clientes onError={onError} />}
+        {tab === "Clientes" && <Clientes onError={onError} onIrResenas={() => setTab("Reseñas")} />}
         {tab === "Reseñas" && <Resenas onError={onError} />}
         {tab === "Reportes" && <Reportes onError={onError} />}
         {tab === "Gestión" && <AdminGestion onError={onError} />}
@@ -173,13 +172,11 @@ export default function AdminPanel() {
 
 function Dashboard({ onError }) {
   const [data, setData] = useState(null);
-  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     let activo = true;
     const cargar = () => {
       apiGet("/admin/dashboard").then((d) => activo && setData(d)).catch(onError);
-      apiGet("/admin/estadisticas?dias=30").then((s) => activo && setStats(s)).catch(onError);
     };
     cargar();
     const id = setInterval(cargar, 15000);
@@ -201,8 +198,6 @@ function Dashboard({ onError }) {
         <Metrica titulo="Turnos hoy" valor={data.turnos_hoy} />
         <Metrica titulo="Turnos esta semana" valor={data.turnos_semana} />
       </div>
-
-      {stats && <GraficoTrafico datos={stats.datos} />}
 
       {data.hoy?.length > 0 && (
         <section>
@@ -286,6 +281,55 @@ function GraficoTrafico({ datos }) {
         <p className="text-[10px] uppercase tracking-[0.1em] text-neutral-400 mt-3 text-right">
           Barra negra = hoy · turnos confirmados y completados
         </p>
+      </div>
+    </section>
+  );
+}
+
+const FECHAS_SAN_JUAN = [
+  ["01-01", "Año Nuevo", "feriado"], ["24-03", "Día Nacional de la Memoria", "feriado"],
+  ["02-04", "Día del Veterano y de los Caídos", "feriado"], ["01-05", "Día del Trabajador", "feriado"],
+  ["25-05", "Revolución de Mayo", "feriado"], ["13-06", "Fundación de San Juan", "cultural"],
+  ["17-06", "Paso a la Inmortalidad de Güemes", "feriado"], ["20-06", "Día de la Bandera", "feriado"],
+  ["24-06", "Noche de San Juan", "cultural"], ["09-07", "Día de la Independencia", "feriado"],
+  ["17-08", "Paso a la Inmortalidad de San Martín", "feriado"], ["12-10", "Diversidad Cultural", "feriado"],
+  ["10-11", "Día de la Tradición", "cultural"], ["20-11", "Día de la Soberanía Nacional", "feriado"],
+  ["08-12", "Inmaculada Concepción", "feriado"], ["25-12", "Navidad", "feriado"],
+];
+
+function CalendarioSanJuan() {
+  const year = new Date().getFullYear();
+  const fechas = Object.fromEntries(FECHAS_SAN_JUAN.map(([fecha, nombre, tipo]) => [`${year}-${fecha}`, { nombre, tipo }]));
+  return (
+    <section>
+      <TituloSeccion>Calendario anual · San Juan</TituloSeccion>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 text-[10px] uppercase tracking-[0.1em] text-neutral-500">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-neutral-900" /> Feriado</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" /> Cultura sanjuanina</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Array.from({ length: 12 }, (_, mes) => {
+            const inicio = new Date(year, mes, 1);
+            const dias = new Date(year, mes + 1, 0).getDate();
+            const offset = (inicio.getDay() + 6) % 7;
+            return (
+              <div key={mes} className="rounded-xl border border-neutral-100 bg-neutral-50/60 p-3">
+                <h3 className="font-serif text-base text-neutral-900 mb-2 capitalize">{inicio.toLocaleDateString("es-AR", { month: "long" })}</h3>
+                <div className="grid grid-cols-7 gap-1 text-center">
+                  {["L", "M", "X", "J", "V", "S", "D"].map((d) => <span key={d} className="text-[9px] text-neutral-400">{d}</span>)}
+                  {Array.from({ length: offset + dias }, (_, i) => {
+                    if (i < offset) return <span key={`empty-${i}`} />;
+                    const dia = i - offset + 1;
+                    const clave = `${year}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+                    const evento = fechas[clave];
+                    return <span key={clave} title={evento?.nombre} className={`relative flex h-6 items-center justify-center rounded-md text-[10px] ${evento ? "font-semibold text-neutral-900" : "text-neutral-500"}`}>{dia}{evento && <span className={`absolute bottom-0.5 h-1 w-1 rounded-full ${evento.tipo === "feriado" ? "bg-neutral-900" : "bg-amber-400"}`} />}</span>;
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -799,7 +843,7 @@ const FILTROS_SEGMENTO = [
   { key: "en_riesgo", label: "En riesgo" },
 ];
 
-function Clientes({ onError }) {
+function Clientes({ onError, onIrResenas }) {
   const [segmento, setSegmento] = useState("");
   const [clientes, setClientes] = useState(null);
   const [busqueda, setBusqueda] = useState("");
@@ -828,6 +872,12 @@ function Clientes({ onError }) {
   return (
     <div className="space-y-4">
       <Quejas onError={onError} />
+      <div className="flex justify-end">
+        <button type="button" onClick={onIrResenas} title="Ver reseñas" aria-label="Ver reseñas"
+          className="group inline-flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 shadow-sm transition-all hover:-translate-y-0.5 hover:border-neutral-900 hover:text-neutral-900 hover:shadow-md">
+          <Star size={18} strokeWidth={1.6} className="transition-transform group-hover:scale-110" />
+        </button>
+      </div>
       <div className="flex flex-wrap gap-2">
         {FILTROS_SEGMENTO.map((f) => (
           <button key={f.key} onClick={() => setSegmento(f.key)}
@@ -1149,6 +1199,7 @@ function Reportes({ onError }) {
   const [desde, setDesde] = useState(primerDiaMes);
   const [hasta, setHasta] = useState(hoy);
   const [data, setData] = useState(null);
+  const [stats, setStats] = useState(null);
   const [cargando, setCargando] = useState(false);
 
   const cargar = useCallback((d = desde, h = hasta) => {
@@ -1161,6 +1212,14 @@ function Reportes({ onError }) {
   }, [desde, hasta, onError]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  useEffect(() => {
+    let activo = true;
+    apiGet("/admin/estadisticas?dias=30")
+      .then((s) => activo && setStats(s))
+      .catch(onError);
+    return () => { activo = false; };
+  }, [onError]);
 
   function aplicarRapido(fn) {
     const [d, h] = fn();
@@ -1192,6 +1251,8 @@ function Reportes({ onError }) {
           </button>
         </div>
       </div>
+
+      <CalendarioSanJuan />
 
       {cargando && <Cargando />}
 
